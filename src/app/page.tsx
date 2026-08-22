@@ -1,5 +1,5 @@
-import { Home } from "@/components/Home";
+import CanvaPage from "./canva/page";
 
-export default function Page() {
-  return <Home />;
+export default function Home() {
+  return <CanvaPage />;
 }

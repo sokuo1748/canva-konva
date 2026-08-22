@@ -1,0 +1,45 @@
+@use "../../../styles/global" as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: $z-index-modal;
+}
+
+.panel {
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  border-radius: $radius-base;
+  background-color: $color-panel-bg;
+  padding: 16px;
+}
+
+.header {
+  // 只有 2 個子元素時 justify-content: space-between 沒辦法讓標題真的視覺置中
+  // （標題會被推到最左邊）。三欄 grid、左邊留一個跟關閉鈕等寬（32px）的空白佔位欄，
+  // 讓標題永遠對齊 header 整體寬度的幾何中心，不受關閉鈕寬度影響。
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 2px solid $color-button-outline-border;
+  margin-bottom: 12px;
+}
+
+.title {
+  text-align: center;
+  color: $color-text-inverse;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}

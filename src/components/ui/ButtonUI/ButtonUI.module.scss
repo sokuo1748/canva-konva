@@ -1,0 +1,51 @@
+@use "../../../styles/global" as *;
+
+.origin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: none;
+  border-radius: 10px;
+  background-color: $color-button-primary-bg;
+  color: $color-button-primary-text;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.template {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 2px solid $color-button-outline-border;
+  border-radius: $radius-base;
+  background-color: transparent;
+  color: $color-text-inverse;
+  font-size: $font-size-base;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.icon {
+  display: inline-flex;
+  align-items: left;
+  justify-content: left;
+  padding: 4px;
+  color: $color-text-inverse;
+}
+
+.name {
+  line-height: 1;
+}

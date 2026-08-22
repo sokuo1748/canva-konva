@@ -1,0 +1,21 @@
+@use "../../../styles/global" as *;
+
+// 目前全專案沒有其他地方使用 InputUI（ExportModal 是第一個），直接改預設樣式
+// 零回歸風險；之後如果有地方需要不同外觀，屆時再考慮加 variant。
+.input {
+  border: 2px solid $color-button-outline-border;
+  border-radius: $radius-base;
+  padding: 0 10px;
+  font-size: $font-size-base;
+  color: $color-text;
+  background-color: #ffffff;
+
+  // 原本借 $color-toolbar-bg（舊主題是深色）在白色 input 上做高對比 focus ring，
+  // 方向 B 後 $color-toolbar-bg 變成近白色，跟 input 背景幾乎同色、focus 狀態
+  // 視覺上等於消失。改用本來就代表 accent 的 $color-button-outline-border，
+  // 語意也更正確（focus ring 用 accent 色，不該借用面板背景色）。
+  &:focus {
+    outline: 2px solid $color-button-outline-border;
+    outline-offset: -1px;
+  }
+}

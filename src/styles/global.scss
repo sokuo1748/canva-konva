@@ -1,0 +1,50 @@
+// ============================
+// 顏色 - Canvas 版面骨架
+// ============================
+// 方向 B・柔和亮色（Soft Light）：面板/工具列改成近白，畫布區留一層柔和灰把白色
+// 頁面襯出來，做法接近 Canva/Figma 的畫布配色邏輯（見 /design 產出的比較畫布）。
+$color-toolbar-bg: oklch(99% 0.001 260);
+$color-toolbar-border: oklch(90% 0.006 260);
+$color-panel-bg: oklch(99% 0.001 260);
+$color-canvas-bg: oklch(93% 0.004 260);
+
+// ============================
+// 顏色 - 一般 UI 元件
+// ============================
+$color-border: oklch(88% 0.006 260);
+$color-text: oklch(22% 0.015 260);
+// 原本是「深色面板上的白字」，方向 B 面板改成近白色後不再有深色背景可反白——
+// 這裡直接沿用跟 $color-text 一樣的深色值，所以現在兩者剛好相同。沒有改名成
+// 一個新變數，是因為改名要動到所有引用它的元件（Toolbar/ButtonUI/IconButtonUI/
+// Modal/SelectedShapePanel），純換色階段先不做這個範圍更大的重構。
+$color-text-inverse: oklch(22% 0.015 260);
+// accent 統一成單一靛藍色相，取代原本「綠色外框＋淺藍主按鈕」兩個互不相關的色相。
+$color-button-primary-bg: oklch(58% 0.19 275);
+$color-button-primary-text: #ffffff;
+$color-icon-badge-border: #3f3f46;
+$color-button-outline-border: oklch(58% 0.19 275);
+
+// ============================
+// 尺寸 - Canvas 版面骨架
+// ============================
+$toolbar-height: 48px;
+$panel-width: 256px;
+
+// ============================
+// 尺寸 - 一般 UI 元件
+// ============================
+// 方向 B 圓角略放大（6px → 12px），質感更柔和。
+$radius-base: 12px;
+$radius-pill: 999px;
+
+// ============================
+// 字體
+// ============================
+$font-size-base: 14px;
+
+// ============================
+// 疊層順序
+// ============================
+// 目前只有 Modal 需要疊在最上層，1000 是「大到不會跟現有內容衝突」的慣例值，
+// 之後如果真的疊多層（例如 modal 裡又開 modal、toast 通知），再擴充命名。
+$z-index-modal: 1000;
