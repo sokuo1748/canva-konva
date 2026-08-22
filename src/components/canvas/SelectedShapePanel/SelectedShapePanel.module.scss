@@ -1,0 +1,60 @@
+@use "../../../styles/global" as *;
+
+.panel {
+  // panelRight 是 flex-direction: column，預設 align-items: stretch 本來就會把這個
+  // pill 拉滿整個寬度——這正是要的效果，不用另外設 align-self。
+  display: flex;
+  align-items: stretch;
+  border: 2px solid $color-button-outline-border;
+  border-radius: $radius-pill;
+  background-color: $color-panel-bg;
+  overflow: hidden;
+  color: $color-text-inverse;
+  font-size: $font-size-base;
+}
+
+.label,
+.value {
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-right: 1px solid $color-button-outline-border;
+  white-space: nowrap;
+}
+
+.label {
+  // 固定寬度、不參與擠壓——只有 .value 要被壓縮/截斷，顯式寫出來避免之後
+  // 改了這裡的 flex 屬性卻沒發現會搶走 .value 的截斷空間。
+  flex-shrink: 0;
+}
+
+.value {
+  flex: 1;
+  justify-content: center;
+  font-weight: 600;
+  // 填滿寬度後，多出來的空間都會分給這一段；id 萬一比容器還長時還是要能截斷，
+  // 不要把 panelRight 撐寬，overflow 交給 flex:1 自動算出的寬度限制。
+  // 注意：不能加 flex-shrink: 0，那樣會讓這段拒絕被壓縮，ellipsis 永遠不會觸發。
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deleteButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border: none;
+  background-color: transparent;
+  color: $color-text-inverse;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  flex-shrink: 0;
+
+  // 同 IconButtonUI：pill 背景（$color-panel-bg）方向 B 後是近白色，
+  // 白色疊層 hover 在近白底上會看不出來，改疊深色。
+  &:hover {
+    background-color: rgba(15, 23, 42, 0.08);
+  }
+}

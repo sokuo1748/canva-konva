@@ -1,0 +1,27 @@
+@use "../../../styles/global" as *;
+
+.toolbar {
+  height: $toolbar-height;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  background-color: $color-toolbar-bg;
+  border-bottom: 2px solid $color-toolbar-border;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// Reset 是破壞性動作，Undo/Redo 是安全動作，中間用一條分隔線區隔，
+// 避免使用者快速點 Undo/Redo 時手滑點到旁邊的 Reset。
+.divider {
+  width: 1px;
+  height: 20px;
+  background-color: $color-toolbar-border;
+  margin: 0 4px;
+}
