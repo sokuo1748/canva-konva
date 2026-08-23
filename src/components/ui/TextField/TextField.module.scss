@@ -1,0 +1,30 @@
+@use "../../../styles/global" as *;
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  font-size: $font-size-base;
+  color: $color-text;
+  opacity: 0.6;
+}
+
+// 延續 InputUI 的邊框/圓角/focus 樣式，InputUI 只包 <input> 沒法直接用在 textarea。
+.textarea {
+  border: 2px solid $color-button-outline-border;
+  border-radius: $radius-base;
+  padding: 8px 10px;
+  font-size: $font-size-base;
+  color: $color-text;
+  background-color: #ffffff;
+  font-family: inherit;
+  resize: vertical;
+
+  &:focus {
+    outline: 2px solid $color-button-outline-border;
+    outline-offset: -1px;
+  }
+}

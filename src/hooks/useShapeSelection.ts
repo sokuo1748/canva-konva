@@ -5,11 +5,10 @@ import type { RefObject } from "react";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { useCanvas } from "../context/CanvasContext";
+import type { ShapePatch } from "../types/shape";
+import { MIN_FONT_SIZE, MIN_SHAPE_SIZE } from "../constants/shapeConstraints";
 
-const MIN_FONT_SIZE = 8;
-const MIN_SHAPE_SIZE = 1;
-
-// 選中非文字物件時用 Transformer 預設的八個控點、可以不等比縮放。
+// 非文字物件用 Transformer 預設的八個控點，可以不等比縮放。
 const DEFAULT_ANCHORS = [
   "top-left",
   "top-center",
@@ -20,13 +19,10 @@ const DEFAULT_ANCHORS = [
   "bottom-center",
   "bottom-right",
 ];
-// 選中文字時只留四個角落控點，並搭配 keepRatio 鎖等比，
-// 讓拖曳一定是「整塊文字等比縮放」，對應 handleTransformEnd 只用一個 scale 值改 fontSize。
+// 文字只留四角控點並鎖 keepRatio，縮放時只用一個 scale 值改 fontSize。
 const TEXT_ANCHORS = ["top-left", "top-right", "bottom-left", "bottom-right"];
 
-// 「選中文字要切成四角控點+鎖等比、其他物件用預設八個控點」這個規則，有兩個地方
-// 需要套用（node 同步掛載時的 useEffect、圖片非同步載入完成後的延遲 attach），
-// 抽成共用函式避免兩處各寫一份、之後改規則忘了改到其中一處。
+// 抽成共用函式：node 掛載時的 useEffect、圖片非同步載入後的延遲 attach 都要套用同一套 anchors 規則。
 function applyTransformerTarget(transformer: Konva.Transformer, node: Konva.Node | undefined) {
   transformer.nodes(node ? [node] : []);
 
@@ -47,29 +43,16 @@ interface UseShapeSelectionResult {
   handleTransformEnd: (id: string) => (e: KonvaEventObject<Event>) => void;
 }
 
-// 選取/拖曳/縮放的 Konva 實作細節都封裝在這裡，用 id 操作、不寫死 shape 類型，
-// 文字、圖片都重用這支 hook，不用另外拆 hook。
-// selectedId 本身不是這裡的 local state，是讀寫 CanvasContext 的 selectedId——
-// 這樣其他元件（例如之後 panelRight 的屬性面板）只要 useCanvas().selectedId 就好，
-// 不需要知道這支 hook 存在。
+// 選取/拖曳/縮放的 Konva 細節都封裝在這裡；selectedId 讀寫 CanvasContext，不是這裡的 local state。
 export function useShapeSelection(): UseShapeSelectionResult {
   const { selectedId, setSelectedId, updateShape, shapes } = useCanvas();
   const transformerRef = useRef<Konva.Transformer>(null);
-  // 存每個 shape 目前掛載的 Konva node，讓 Transformer 可以直接拿到實際 node，
-  // 不用每次選取都重新查找。
+  // 存每個 shape 目前掛載的 Konva node，Transformer 才不用每次選取都重新查找。
   const shapeNodesRef = useRef<Map<string, Konva.Node>>(new Map());
-  // registerShapeRef(id) 是在 JSX 裡用 `ref={registerShapeRef(shape.id)}` inline 呼叫，
-  // 如果每次 render 都回傳新函式，React 會判定 ref 身分變了、對每個 shape 觸發一次
-  // 「先 null 再重新 set」。這裡改成 get-or-create 快取同一個 id 對應的 callback，
-  // 讓 ref 身分跨 render 穩定，避免不必要的 ref churn。
-  // 刪除 shape 時，跟它對應的快取 callback 也要一起清掉，不然會累積永遠不會
-  // 釋放的函式（見下面 registerShapeRef 的 null 分支，以及下方的保底 useEffect）。
+  // get-or-create 快取 ref callback，讓身分跨 render 穩定，避免不必要的 ref churn。
   const shapeRefCallbacksRef = useRef<Map<string, (node: Konva.Node | null) => void>>(new Map());
 
-  // registerShapeRef 的 callback 是跨 render 快取住的（見上面），如果直接讀外層的
-  // selectedId 會抓到 callback「第一次建立當下」的舊值（stale closure）。圖片是非同步
-  // 載入完成才會呼叫到這個 callback（可能發生在 selectedId 變動很久之後），
-  // 所以要用 ref 保存最新的 selectedId，讓 callback 執行當下能讀到正確的值。
+  // 快取住的 callback 若直接讀 selectedId 會抓到建立當下的 stale closure，改用 ref 讀最新值。
   const selectedIdRef = useRef(selectedId);
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -82,16 +65,12 @@ export function useShapeSelection(): UseShapeSelectionResult {
     const callback = (node: Konva.Node | null) => {
       if (node) {
         shapeNodesRef.current.set(id, node);
-        // node 剛掛上時，如果剛好就是目前選中的 id（典型情境：新增圖片後自動選取，
-        // 但圖片要等 URLImage 內部非同步載入完成才會有 Konva node），代表下面那個依
-        // selectedId 變動的 useEffect 早就跑過、抓不到這個當時還不存在的 node，
-        // 這裡補一次手動 attach（用 applyTransformerTarget 而不是自己重寫一次，
-        // 不然又會變成兩處各寫一份判斷邏輯，之後改規則容易忘了改到其中一處）。
+        // node 剛掛上時如果正是目前選中的 id（例如圖片非同步載入完成才有 node），補一次手動 attach。
         if (id === selectedIdRef.current && transformerRef.current) {
           applyTransformerTarget(transformerRef.current, node);
         }
       } else {
-        // node 為 null 代表這個 id 對應的 Konva node 剛 unmount（shape 被刪除）。
+        // node 為 null 代表這個 shape 被刪除、Konva node 剛 unmount。
         shapeNodesRef.current.delete(id);
         shapeRefCallbacksRef.current.delete(id);
       }
@@ -100,13 +79,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
     return callback;
   }, []);
 
-  // 保底清理：上面 registerShapeRef 的 null 分支只會在「Konva node 曾經掛載過、
-  // 之後 unmount」時觸發。但 URLImage 是圖片非同步載入完成前 return null（不渲染
-  // 任何帶 ref 的節點），如果一張圖片還沒載入完成就被刪除（例如手滑 undo 掉），
-  // 它的 ref callback 從頭到尾不會被呼叫過一次，null 分支永遠不會觸發，兩個 Map
-  // 裡就會殘留一個對應不存在 id 的 entry。這裡改成每次 shapes 變動時，主動比對
-  // 「目前還存在的 id」，把 Map 裡不在名單上的殘留 entry 清掉，跟上面的即時清理
-  // 並存、互補。
+  // 保底清理：圖片還沒載入完成就被刪除時，ref callback 從沒被呼叫過，上面的 null 分支不會觸發，這裡補清。
   useEffect(() => {
     const liveIds = new Set(shapes.map((shape) => shape.id));
     for (const id of shapeNodesRef.current.keys()) {
@@ -134,7 +107,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
 
   const handleStageMouseDown = useCallback(
     (e: KonvaEventObject<MouseEvent>) => {
-      // 點到 Stage 本身（畫布空白處）才取消選取，點到 shape 時 e.target 會是那個 shape。
+      // 點到 Stage 本身（畫布空白處）才取消選取。
       if (e.target === e.target.getStage()) {
         setSelectedId(null);
       }
@@ -144,7 +117,8 @@ export function useShapeSelection(): UseShapeSelectionResult {
 
   const handleDragEnd = useCallback(
     (id: string) => (e: KonvaEventObject<DragEvent>) => {
-      updateShape(id, { x: e.target.x(), y: e.target.y() });
+      // x/y 統一只能整數。
+      updateShape(id, { x: Math.round(e.target.x()), y: Math.round(e.target.y()) });
     },
     [updateShape],
   );
@@ -155,31 +129,47 @@ export function useShapeSelection(): UseShapeSelectionResult {
       const scaleX = node.scaleX();
       const scaleY = node.scaleY();
 
-      // CLAUDE.md 慣例：縮放結束一律把 scale 讀出來後重置回 1，並改寫 width/height（或 fontSize），
-      // 避免下次拖曳時尺寸疊加跑掉。
+      // 縮放結束一律把 scale 重置回 1，改寫 width/height（或 fontSize），避免下次拖曳疊加跑掉。
       node.scaleX(1);
       node.scaleY(1);
 
+      // 旋轉角度跟 x/y/width/height 一樣統一只存整數。
+      const rotation = Math.round(node.rotation());
+
       if (node.getClassName() === "Text") {
-        // 文字選取時 Transformer 鎖了 keepRatio，scaleX/scaleY 理論上相等，用 scaleX 就好。
-        // 只改 fontSize，不碰 width/height——文字沒有存這兩個欄位（見 TextShape）。
+        // 文字鎖了 keepRatio，只用 scaleX 改 fontSize，不碰 width/height（TextShape 沒有這兩個欄位）。
         const currentFontSize = (node as Konva.Text).fontSize();
         updateShape(id, {
-          x: node.x(),
-          y: node.y(),
+          x: Math.round(node.x()),
+          y: Math.round(node.y()),
+          rotation,
           fontSize: Math.max(Math.round(currentFontSize * scaleX), MIN_FONT_SIZE),
         });
         return;
       }
 
-      updateShape(id, {
-        x: node.x(),
-        y: node.y(),
-        width: Math.max(node.width() * scaleX, MIN_SHAPE_SIZE),
-        height: Math.max(node.height() * scaleY, MIN_SHAPE_SIZE),
-      });
+      // x/y/width/height 統一只能整數，先 round 再 clamp 下限。
+      const width = Math.max(Math.round(node.width() * scaleX), MIN_SHAPE_SIZE);
+      const height = Math.max(Math.round(node.height() * scaleY), MIN_SHAPE_SIZE);
+      const patch: ShapePatch = {
+        x: Math.round(node.x()),
+        y: Math.round(node.y()),
+        rotation,
+        width,
+        height,
+      };
+
+      // 矩形縮放後 cornerRadius 可能超過新尺寸上限（不該超過短邊一半），趁縮放當下一併夾住。
+      const currentShape = shapes.find((shape) => shape.id === id);
+      if (currentShape?.type === "rect") {
+        // Math.floor 讓上限保證是整數，避免奇數邊 /2 產生 .5 讓結果變非整數。
+        const maxCornerRadius = Math.floor(Math.min(width, height) / 2);
+        patch.cornerRadius = Math.min(currentShape.cornerRadius, maxCornerRadius);
+      }
+
+      updateShape(id, patch);
     },
-    [updateShape],
+    [updateShape, shapes],
   );
 
   return {

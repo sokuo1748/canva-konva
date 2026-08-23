@@ -14,11 +14,9 @@ export function TemplatePanel() {
     fileInputRef.current?.click();
   };
 
-  // accept="image/*" 只是瀏覽器 UI 層的篩選提示，不是硬限制（使用者選「顯示所有檔案」
-  // 還是能選到非圖片檔），所以這裡一定要再做一次 runtime 型別檢查。
+  // accept 只是瀏覽器篩選提示不是硬限制，還要再做一次 runtime 型別檢查。
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    // 後面要經過兩層非同步 callback（FileReader → Image）才會結束，統一先存住
-    // DOM 參照，所有結束路徑都靠它清空 value，不要依賴之後還能安全存取 e.target。
+    // 先存住 DOM 參照，後面兩層非同步 callback 都靠它清空 value。
     const inputEl = e.currentTarget;
     const file = inputEl.files?.[0];
     if (!file) return;
