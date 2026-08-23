@@ -1,0 +1,15 @@
+@use "../../../styles/global" as *;
+
+// label 在上、input 在下垂直堆疊，避免長屬性名兩欄併排會擠。
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+// 用 $color-text + 降低 opacity 做次要文字的視覺層次，不新發明顏色 token。
+.label {
+  font-size: $font-size-base;
+  color: $color-text;
+  opacity: 0.6;
+}

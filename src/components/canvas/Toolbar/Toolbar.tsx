@@ -11,10 +11,7 @@ import styles from "./Toolbar.module.scss";
 export function Toolbar() {
   const { resetCanvas, undo, redo, canUndo, canRedo } = useCanvas();
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  // useCallback：Modal 內部的 Escape 監聽 effect 依賴 onClose，這裡訂閱了
-  // useCanvas() 的多個值，任何畫布狀態變動都會讓 Toolbar 重新渲染；如果直接傳
-  // inline arrow function，每次渲染都是新的函式參考，會讓 Modal 開著時不斷
-  // 重新掛載/卸載 keydown 監聽器（不是 leak，但是可避免的重複工作）。
+  // useCallback 保持函式參考穩定，避免 Modal 開著時 Escape 監聽被不必要地重掛。
   const closeExportModal = useCallback(() => setIsExportModalOpen(false), []);
 
   return (
@@ -45,8 +42,7 @@ export function Toolbar() {
           onClick={() => setIsExportModalOpen(true)}
         />
       </div>
-      {/* key 隨 open 狀態切換：每次重新打開都是一個全新的 ExportModal 實例，
-          內部的 filename state 自然拿到初始值，不用額外的 reset 邏輯。 */}
+      {/* key 隨 open 切換，重新打開就是全新實例，filename state 自動歸零。 */}
       <ExportModal key={String(isExportModalOpen)} open={isExportModalOpen} onClose={closeExportModal} />
     </div>
   );

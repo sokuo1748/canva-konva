@@ -13,8 +13,7 @@
   cursor: pointer;
   transition: background-color 0.15s ease;
 
-  // 方向 B 換成柔和亮色主題後，面板背景（$color-panel-bg）已經是近白色，
-  // 原本疊白色 8% 的 hover 效果在近白底上幾乎看不出來，改疊深色。
+  // 面板背景是近白色，hover 疊深色才看得出來。
   &:hover:not(:disabled) {
     background-color: rgba(15, 23, 42, 0.06);
   }

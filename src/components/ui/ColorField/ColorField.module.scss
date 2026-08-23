@@ -1,0 +1,13 @@
+@use "../../../styles/global" as *;
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  font-size: $font-size-base;
+  color: $color-text;
+  opacity: 0.6;
+}
