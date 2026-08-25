@@ -23,8 +23,7 @@ export function ExportModal({ open, onClose }: ExportModalProps) {
   const { containerRef } = useCanvas();
   const [filename, setFilename] = useState(DEFAULT_FILENAME);
 
-  // 直接對 containerRef 底下的 <canvas> 呼叫 toDataURL()（KonvaBoard 目前只有一個 Layer）。
-  // 已知限制：匯出的是目前畫面看到的樣子，含縮放/平移狀態，選取中的 Transformer 控制框也會一起匯出。
+  // 直接對 containerRef 底下的 <canvas> 呼叫 toDataURL()；已知限制：匯出的是目前畫面看到的樣子，含縮放/選取框。
   const handleExport = () => {
     const canvas = containerRef.current?.querySelector("canvas");
     if (!canvas) {

@@ -9,7 +9,9 @@ import type { ImageShape } from "../../../types/shape";
 interface URLImageProps {
   shape: ImageShape;
   draggable?: boolean;
-  onClick?: () => void;
+  onClick?: (e: KonvaEventObject<MouseEvent>) => void;
+  onDragStart?: (e: KonvaEventObject<DragEvent>) => void;
+  onDragMove?: (e: KonvaEventObject<DragEvent>) => void;
   onDragEnd?: (e: KonvaEventObject<DragEvent>) => void;
   onTransformEnd?: (e: KonvaEventObject<Event>) => void;
 }

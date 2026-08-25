@@ -3,3 +3,9 @@
   flex-direction: column;
   gap: 12px;
 }
+
+// 粗體/底線/中線三顆切換鈕排一列，見上方架構重點。
+.toggleRow {
+  display: flex;
+  gap: 4px;
+}

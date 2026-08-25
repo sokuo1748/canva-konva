@@ -27,6 +27,15 @@
 
 .panelLeft {
   border-right: 2px solid $color-toolbar-border;
+  // 蓋掉繼承自 .panel 的 overflow-y:auto —— 這個 aside 本身不捲動，捲動交給
+  // 裡面 LayersPanel 自己的 overflow-y:auto，TemplatePanel 的按鈕才能固定釘在底部。
+  overflow: hidden;
+}
+
+.panelDivider {
+  flex-shrink: 0;
+  height: 2px;
+  background-color: $color-toolbar-border;
 }
 
 .panelRight {

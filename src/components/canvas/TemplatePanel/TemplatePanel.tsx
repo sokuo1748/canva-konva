@@ -7,7 +7,7 @@ import { templateList } from "./templateList";
 import { useCanvas } from "../../../context/CanvasContext";
 
 export function TemplatePanel() {
-  const { addSquare, addText, addImage } = useCanvas();
+  const { addText, addImage, isShapePickerOpen, setIsShapePickerOpen } = useCanvas();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageButtonClick = () => {
@@ -60,7 +60,7 @@ export function TemplatePanel() {
           height={60}
           onClick={
             item.id === "shape"
-              ? addSquare
+              ? () => setIsShapePickerOpen(!isShapePickerOpen)
               : item.id === "text"
                 ? addText
                 : item.id === "image"
