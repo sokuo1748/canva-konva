@@ -1,0 +1,80 @@
+@use "../../../styles/global" as *;
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  // 沒有這行，flex item 預設 min-height:auto 不會縮小，內容一多就會撐爆父層、
+  // 把下面固定高度的 Image/Shape/Text 按鈕擠出畫面，而不是自己內部捲動。
+  min-height: 0;
+  overflow-y: auto;
+}
+
+// .row/.bracket 現在也是 dnd-kit useSortable 的 ref 目標，都加 touch-action: none——
+// dnd-kit 官方建議，避免 PointerSensor 跟原生觸控捲動搶事件。已知取捨：觸控裝置在列上
+// 按住沒辦法直接捲動清單，只能在列與列的間隙捲動，這個 app 目前是滑鼠優先，先接受。
+.row,
+.bracket {
+  touch-action: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: $radius-base;
+  border: 2px solid transparent;
+  // 整列都是拖曳區，用 grab/grabbing 溝通可拖曳，跟純點擊按鈕的 pointer 區分開。
+  cursor: grab;
+  font-size: $font-size-base;
+  color: $color-text;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background-color: $color-canvas-bg;
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+// 選取中的高亮用跟 SelectedShapePanel 一致的 accent 外框色，跟下面 bracket 的中性邊框色分開，
+// 兩種視覺意義（選取 vs 綁定分組）才不會混在一起。
+.rowSelected {
+  border-color: $color-button-outline-border;
+}
+
+.rowIcon {
+  flex-shrink: 0;
+}
+
+.rowLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bracket {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 2px solid $color-toolbar-border;
+  border-radius: $radius-base;
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+// 拖曳中的單位（single 列或整個分組）降低透明度當視覺回饋，其餘單位的位移動畫交給
+// dnd-kit 提供的 transition（inline style，見 SortableLayerRow/SortableBracket）。
+.dragging {
+  opacity: 0.5;
+}

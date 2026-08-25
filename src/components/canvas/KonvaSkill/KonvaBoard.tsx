@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Layer, Rect, Stage, Text, Transformer } from "react-konva";
+import { Circle, Layer, Line, Rect, RegularPolygon, Stage, Star, Text, Transformer } from "react-konva";
+import type { KonvaEventObject } from "konva/lib/Node";
 import { useCanvas } from "../../../context/CanvasContext";
 import { useShapeSelection } from "../../../hooks/useShapeSelection";
 import { URLImage } from "./URLImage";
@@ -15,10 +16,15 @@ const FIT_PADDING_RATIO = 0.9;
 export function KonvaBoard() {
   const { shapes, canvasWidth, canvasHeight, containerRef } = useCanvas();
   const {
+    marqueeRect,
     transformerRef,
     registerShapeRef,
     handleSelect,
     handleStageMouseDown,
+    handleStageMouseMove,
+    handleStageMouseUp,
+    handleDragStart,
+    handleDragMove,
     handleDragEnd,
     handleTransformEnd,
   } = useShapeSelection();
@@ -62,6 +68,8 @@ export function KonvaBoard() {
         x={stagePos.x}
         y={stagePos.y}
         onMouseDown={handleStageMouseDown}
+        onMouseMove={handleStageMouseMove}
+        onMouseUp={handleStageMouseUp}
       >
         <Layer>
           <Rect
@@ -78,7 +86,9 @@ export function KonvaBoard() {
           {shapes.map((shape) => {
             const commonHandlers = {
               draggable: true,
-              onClick: () => handleSelect(shape.id),
+              onClick: (e: KonvaEventObject<MouseEvent>) => handleSelect(shape.id, e),
+              onDragStart: handleDragStart(shape.id),
+              onDragMove: handleDragMove(shape.id),
               onDragEnd: handleDragEnd(shape.id),
               onTransformEnd: handleTransformEnd(shape.id),
             };
@@ -94,6 +104,11 @@ export function KonvaBoard() {
                   text={shape.text}
                   fontSize={shape.fontSize}
                   fill={shape.fill}
+                  fontStyle={shape.bold ? "bold" : "normal"}
+                  // Konva 用 .indexOf('underline')/.indexOf('line-through') 判斷，空白分隔可以同時套用兩種。
+                  textDecoration={[shape.underline && "underline", shape.strikethrough && "line-through"]
+                    .filter(Boolean)
+                    .join(" ")}
                   {...commonHandlers}
                 />
               );
@@ -105,6 +120,74 @@ export function KonvaBoard() {
                   key={shape.id}
                   ref={registerShapeRef(shape.id)}
                   shape={shape}
+                  {...commonHandlers}
+                />
+              );
+            }
+
+            // circle/triangle/star 直接傳 radius/innerRadius/outerRadius，不透過 width/height 這層便利介面繞。
+            if (shape.type === "circle") {
+              return (
+                <Circle
+                  key={shape.id}
+                  ref={registerShapeRef(shape.id)}
+                  x={shape.x}
+                  y={shape.y}
+                  rotation={shape.rotation}
+                  radius={shape.size / 2}
+                  fill={shape.fill}
+                  {...commonHandlers}
+                />
+              );
+            }
+
+            if (shape.type === "triangle") {
+              return (
+                <RegularPolygon
+                  key={shape.id}
+                  ref={registerShapeRef(shape.id)}
+                  x={shape.x}
+                  y={shape.y}
+                  rotation={shape.rotation}
+                  sides={3}
+                  radius={shape.size / 2}
+                  fill={shape.fill}
+                  {...commonHandlers}
+                />
+              );
+            }
+
+            if (shape.type === "star") {
+              return (
+                <Star
+                  key={shape.id}
+                  ref={registerShapeRef(shape.id)}
+                  x={shape.x}
+                  y={shape.y}
+                  rotation={shape.rotation}
+                  numPoints={5}
+                  innerRadius={shape.size / 4}
+                  outerRadius={shape.size / 2}
+                  fill={shape.fill}
+                  {...commonHandlers}
+                />
+              );
+            }
+
+            if (shape.type === "line") {
+              return (
+                <Line
+                  key={shape.id}
+                  ref={registerShapeRef(shape.id)}
+                  x={shape.x}
+                  y={shape.y}
+                  rotation={shape.rotation}
+                  points={shape.points}
+                  stroke={shape.stroke}
+                  strokeWidth={shape.strokeWidth}
+                  dash={shape.dash}
+                  // Konva 預設縮放時筆畫粗細會跟著視覺拉伸，關掉這個讓拖曳中筆畫粗細維持恆定，跟放開後一致。
+                  strokeScaleEnabled={false}
                   {...commonHandlers}
                 />
               );
@@ -125,6 +208,19 @@ export function KonvaBoard() {
               />
             );
           })}
+          {marqueeRect && (
+            // 框選中的視覺提示，純視覺不接事件；放開滑鼠後（見 handleStageMouseUp）就會消失。
+            <Rect
+              x={marqueeRect.x}
+              y={marqueeRect.y}
+              width={marqueeRect.width}
+              height={marqueeRect.height}
+              fill="rgba(79, 70, 229, 0.08)"
+              stroke="#4f46e5"
+              dash={[4, 4]}
+              listening={false}
+            />
+          )}
           <Transformer ref={transformerRef} rotateEnabled />
         </Layer>
       </Stage>

@@ -1,0 +1,7 @@
+@use "../../../styles/global" as *;
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
