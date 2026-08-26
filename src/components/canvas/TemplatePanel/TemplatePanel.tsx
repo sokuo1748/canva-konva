@@ -6,18 +6,18 @@ import { ButtonUI } from "../../ui/ButtonUI/ButtonUI";
 import { templateList } from "./templateList";
 import { useCanvas } from "../../../context/CanvasContext";
 
+// panelLeft 底部的 Image/Shape/Text/Paint 新增按鈕
 export function TemplatePanel() {
-  const { addText, addImage, isShapePickerOpen, setIsShapePickerOpen } = useCanvas();
+  const { addText, addImage, isShapePickerOpen, setIsShapePickerOpen, activeTool, setActiveTool } = useCanvas();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageButtonClick = () => {
     fileInputRef.current?.click();
   };
 
-  // accept 只是瀏覽器篩選提示不是硬限制，還要再做一次 runtime 型別檢查。
+  // 選擇圖片檔案並新增到畫布
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    // 先存住 DOM 參照，後面兩層非同步 callback 都靠它清空 value。
-    const inputEl = e.currentTarget;
+    const inputEl = e.currentTarget; // 先存住，非同步 callback 都靠它清空 value
     const file = inputEl.files?.[0];
     if (!file) return;
 
@@ -60,12 +60,20 @@ export function TemplatePanel() {
           height={60}
           onClick={
             item.id === "shape"
-              ? () => setIsShapePickerOpen(!isShapePickerOpen)
+              ? () => {
+                  setActiveTool("select"); // Shape 選單跟 Paint 面板互斥
+                  setIsShapePickerOpen(!isShapePickerOpen);
+                }
               : item.id === "text"
                 ? addText
                 : item.id === "image"
                   ? handleImageButtonClick
-                  : undefined
+                  : item.id === "paint"
+                    ? () => {
+                        setIsShapePickerOpen(false);
+                        setActiveTool(activeTool === "select" ? "brush" : "select");
+                      }
+                    : undefined
           }
         />
       ))}

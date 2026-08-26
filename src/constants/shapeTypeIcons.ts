@@ -1,4 +1,5 @@
 import {
+  IconBrush,
   IconCircle,
   IconLine,
   IconPhoto,
@@ -10,7 +11,7 @@ import {
 import type { TablerIconComponent } from "../components/ui/icon-map";
 import type { CanvasShape } from "../types/shape";
 
-// 依 shape.type 決定的固定對應，給 LayersPanel/ShapePicker 等多個元件共用；不用 ui/icon-map 的字串查表，這裡的 icon 完全由 CanvasShape["type"] 決定。
+// shape.type 對應的圖示，給 LayersPanel/ShapePicker 共用
 export const SHAPE_TYPE_ICONS: Record<CanvasShape["type"], TablerIconComponent> = {
   rect: IconSquare,
   text: IconTypography,
@@ -19,4 +20,5 @@ export const SHAPE_TYPE_ICONS: Record<CanvasShape["type"], TablerIconComponent> 
   triangle: IconTriangle,
   star: IconStar,
   line: IconLine,
+  brush: IconBrush,
 };

@@ -9,13 +9,12 @@ interface TextFieldProps {
   onCommit: (value: string) => void;
 }
 
-// 打字不即時同步，離開欄位或按 Enter 才 commit，避免逐字元灌爆 undo history。
+// 文字內容欄位，離開欄位或按 Enter 才 commit
 export function TextField({ label, value, onCommit }: TextFieldProps) {
   const { displayValue, handleFocus, handleChange, commit } = useFieldDraft<string>(
     value,
     (v) => v,
-    // 空字串（或全空白）擋掉不 commit，避免變成選不到的零面積節點。
-    (raw) => (raw.trim().length === 0 ? null : raw),
+    (raw) => (raw.trim().length === 0 ? null : raw), // 空字串不 commit
     onCommit,
   );
 
@@ -30,7 +29,7 @@ export function TextField({ label, value, onCommit }: TextFieldProps) {
         onChange={(e) => handleChange(e.target.value)}
         onBlur={() => commit()}
         onKeyDown={(e) => {
-          // Enter 送出但不失焦（keepEditing）、Shift+Enter 換行、isComposing 排除 IME 選字中的 Enter。
+          // Enter 送出但不失焦，Shift+Enter 換行
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             commit({ keepEditing: true });

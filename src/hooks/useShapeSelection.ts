@@ -11,26 +11,28 @@ import { isAdditiveClick } from "../utils/selection";
 import { rectsIntersect } from "../utils/geometry";
 import type { Rect } from "../utils/geometry";
 
-// 大部分 shape 類型（含多選）都只留四角控點，不給邊控點（不能只改寬或只改高），文字/rect/image 合併成同一個常數。
+// 大部分 shape 類型（含多選）只留四角控點，不給邊控點
 const CORNER_ANCHORS = ["top-left", "top-right", "bottom-left", "bottom-right"];
-// Line 只留左中／右中兩個控點，符合「拉一條線的兩端來拉長/縮短」的直覺操作，不需要角控點。
+// Line 只留左中／右中兩個控點（拉線段兩端）
 const LINE_ANCHORS = ["middle-left", "middle-right"];
 
-// 拖曳距離小於這個值（canvas 座標系下的 px）視為單純點擊，不當作框選。
+// 拖曳距離小於這個值視為單純點擊，不當作框選
 const MARQUEE_DRAG_THRESHOLD = 4;
-// 線段縮放後兩端點距離不能低於這個值，跟其他形狀「絕不縮到消失」一致，直接沿用 MIN_SHAPE_SIZE。
+// 線段縮放後兩端點距離下限
 const MIN_LINE_LENGTH = MIN_SHAPE_SIZE;
 
-// Circle/RegularPolygon/Star 的 width/height 在 Konva 裡都綁死同一顆半徑換算，跟 Text 一樣單一選取時必須鎖 keepRatio，否則 scaleX/scaleY 不一致時縮放結果會跟拖曳手感對不上。
+// 這幾種 shape 的 width/height 都綁死同一顆半徑，單選時必須鎖 keepRatio
 const UNIFORM_SCALE_CLASS_NAMES = new Set(["Text", "Circle", "RegularPolygon", "Star"]);
 
-// 共用函式：控點預設四角，只有單選 Line 才換成 LINE_ANCHORS；keepRatio 獨立於控點種類，只有單選且在 UNIFORM_SCALE_CLASS_NAMES 裡才鎖。
+// 依選取節點設定 Transformer 的控點與 keepRatio
 function applyTransformerTarget(transformer: Konva.Transformer, nodes: Konva.Node[]) {
   transformer.nodes(nodes);
 
-  const isSingleLine = nodes.length === 1 && nodes[0].getClassName() === "Line";
+  // 畫筆筆畫底層也是 Line，靠 name="freehand"（見 KonvaBoard.tsx）排除，避免套用直線專用的兩端控點
+  const isSingleStraightLine =
+    nodes.length === 1 && nodes[0].getClassName() === "Line" && !nodes[0].hasName("freehand");
   const keepRatio = nodes.length === 1 && UNIFORM_SCALE_CLASS_NAMES.has(nodes[0].getClassName());
-  transformer.enabledAnchors(isSingleLine ? LINE_ANCHORS : CORNER_ANCHORS);
+  transformer.enabledAnchors(isSingleStraightLine ? LINE_ANCHORS : CORNER_ANCHORS);
   transformer.keepRatio(keepRatio);
 
   transformer.getLayer()?.batchDraw();
@@ -39,35 +41,36 @@ function applyTransformerTarget(transformer: Konva.Transformer, nodes: Konva.Nod
 interface UseShapeSelectionResult {
   selectedId: string | null;
   selectedIds: string[];
-  marqueeRect: Rect | null;
+  marqueeRect: Rect | null; // 框選中的矩形範圍
   transformerRef: RefObject<Konva.Transformer | null>;
-  registerShapeRef: (id: string) => (node: Konva.Node | null) => void;
-  handleSelect: (id: string, e: KonvaEventObject<MouseEvent>) => void;
+  registerShapeRef: (id: string) => (node: Konva.Node | null) => void; // 註冊 shape 對應的 Konva node
+  handleSelect: (id: string, e: KonvaEventObject<MouseEvent>) => void; // 點擊選取
   handleStageMouseDown: (e: KonvaEventObject<MouseEvent>) => void;
   handleStageMouseMove: (e: KonvaEventObject<MouseEvent>) => void;
   handleStageMouseUp: (e: KonvaEventObject<MouseEvent>) => void;
   handleDragStart: (id: string) => (e: KonvaEventObject<DragEvent>) => void;
   handleDragMove: (id: string) => (e: KonvaEventObject<DragEvent>) => void;
   handleDragEnd: (id: string) => (e: KonvaEventObject<DragEvent>) => void;
-  handleTransformEnd: (id: string) => (e: KonvaEventObject<Event>) => void;
+  handleTransformEnd: (id: string) => (e: KonvaEventObject<Event>) => void; // 縮放/旋轉結束後寫回屬性
 }
 
-// 選取/拖曳/縮放/框選的 Konva 細節都封裝在這裡；selectedIds 讀寫 CanvasContext，不是這裡的 local state。
+// 選取/拖曳/縮放/框選邏輯，selectedIds 讀寫 CanvasContext
 export function useShapeSelection(): UseShapeSelectionResult {
   const { selectedId, selectedIds, setSelectedIds, setActiveId, selectShape, updateShape, updateShapes, shapes } =
     useCanvas();
   const transformerRef = useRef<Konva.Transformer>(null);
-  // 存每個 shape 目前掛載的 Konva node，Transformer 才不用每次選取都重新查找。
+  // 每個 shape 目前掛載的 Konva node
   const shapeNodesRef = useRef<Map<string, Konva.Node>>(new Map());
-  // get-or-create 快取 ref callback，讓身分跨 render 穩定，避免不必要的 ref churn。
+  // 快取 ref callback，維持跨 render 身分穩定
   const shapeRefCallbacksRef = useRef<Map<string, (node: Konva.Node | null) => void>>(new Map());
 
-  // 快取住的 callback 若直接讀 selectedIds 會抓到建立當下的 stale closure，改用 ref 讀最新值。
+  // 讀最新選取值，避免快取住的 callback 抓到 stale closure
   const selectedIdsRef = useRef(selectedIds);
   useEffect(() => {
     selectedIdsRef.current = selectedIds;
   }, [selectedIds]);
 
+  // 註冊 shape 對應的 Konva node
   const registerShapeRef = useCallback((id: string) => {
     const cached = shapeRefCallbacksRef.current.get(id);
     if (cached) return cached;
@@ -75,7 +78,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
     const callback = (node: Konva.Node | null) => {
       if (node) {
         shapeNodesRef.current.set(id, node);
-        // node 剛掛上時如果正是目前選取的一員（例如圖片非同步載入完成才有 node），補一次手動 attach。
+        // node 剛掛上時如果正是目前選取的一員，補一次手動 attach
         if (selectedIdsRef.current.includes(id) && transformerRef.current) {
           const nodes = selectedIdsRef.current
             .map((selectedShapeId) => shapeNodesRef.current.get(selectedShapeId))
@@ -83,7 +86,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
           applyTransformerTarget(transformerRef.current, nodes);
         }
       } else {
-        // node 為 null 代表這個 shape 被刪除、Konva node 剛 unmount。
+        // node 為 null 代表這個 shape 被刪除
         shapeNodesRef.current.delete(id);
         shapeRefCallbacksRef.current.delete(id);
       }
@@ -92,7 +95,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
     return callback;
   }, []);
 
-  // 保底清理：圖片還沒載入完成就被刪除時，ref callback 從沒被呼叫過，上面的 null 分支不會觸發，這裡補清。
+  // 保底清理：處理圖片還沒載入完成就被刪除的情況
   useEffect(() => {
     const liveIds = new Set(shapes.map((shape) => shape.id));
     for (const id of shapeNodesRef.current.keys()) {
@@ -103,6 +106,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
     }
   }, [shapes]);
 
+  // 選取變動時同步 Transformer
   useEffect(() => {
     const transformer = transformerRef.current;
     if (!transformer) return;
@@ -113,6 +117,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
     applyTransformerTarget(transformer, nodes);
   }, [selectedIds]);
 
+  // 點擊選取
   const handleSelect = useCallback(
     (id: string, e: KonvaEventObject<MouseEvent>) => {
       selectShape(id, isAdditiveClick(e.evt));
@@ -120,16 +125,15 @@ export function useShapeSelection(): UseShapeSelectionResult {
     [selectShape],
   );
 
-  // 框選（marquee）狀態：mousedown 記錄起點、mousemove 更新範圍、mouseup 依相交決定選取結果。
+  // 框選狀態：mousedown 記錄起點、mousemove 更新範圍、mouseup 依相交決定選取結果
   const [marqueeRect, setMarqueeRect] = useState<Rect | null>(null);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const handleStageMouseDown = useCallback(
     (e: KonvaEventObject<MouseEvent>) => {
-      // 點到 shape 本身交給 shape 自己的 onClick 處理，這裡只處理「點空白處」。
+      // 點到 shape 交給 shape 自己的 onClick，這裡只處理點空白處
       if (e.target !== e.target.getStage()) return;
 
-      // 已知限制（刻意簡化，不是 bug）：空白處一律直接清空選取，不像點擊會判斷 isAdditiveClick 保留原選取，框選也不支援 shift+拖曳加選。
       setSelectedIds([]);
       setActiveId(null);
 
@@ -142,13 +146,12 @@ export function useShapeSelection(): UseShapeSelectionResult {
     [setSelectedIds, setActiveId],
   );
 
-  // mouseup/mousemove 共用的收尾邏輯，因為滑鼠移出 Stage 容器才放開左鍵時 Konva 的 mouseup 不會觸發，要靠 mousemove 補上同一套收尾。
+  // mouseup/mousemove 共用的框選收尾邏輯
   const finishMarquee = useCallback(
     (rect: Rect | null, stage: Konva.Stage | null) => {
       marqueeStartRef.current = null;
       setMarqueeRect(null);
 
-      // 拖曳距離太小視為單純點擊，空白處的清空選取在 mousedown 時已經做過了。
       if (!rect || (rect.width < MARQUEE_DRAG_THRESHOLD && rect.height < MARQUEE_DRAG_THRESHOLD)) return;
       if (!stage) return;
 
@@ -158,9 +161,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
           return node ? rectsIntersect(rect, node.getClientRect({ relativeTo: stage })) : false;
         })
         .map((shape) => shape.id);
-      // 已知限制：跟 selectShape 不一樣，框選沒有「框到分組其中一個成員就展開成整組」的邏輯，是刻意先不處理的範圍。
       setSelectedIds(hitIds);
-      // 框選沒有「使用者實際點的那一個」這種明確目標，一律清空 activeId，交給 selectedIds.length 判斷面板要顯示什麼。
       setActiveId(null);
     },
     [shapes, setSelectedIds, setActiveId],
@@ -170,7 +171,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
     (e: KonvaEventObject<MouseEvent>) => {
       if (!marqueeStartRef.current) return;
 
-      // e.evt.buttons 是目前仍按著的按鍵（1 = 左鍵），偵測到已放開就直接收尾，避免框選矩形卡著跟游標跑。
+      // 偵測到滑鼠左鍵已放開就直接收尾，避免框選矩形卡著跟游標跑
       if ((e.evt.buttons & 1) === 0) {
         finishMarquee(marqueeRect, e.target.getStage());
         return;
@@ -197,12 +198,11 @@ export function useShapeSelection(): UseShapeSelectionResult {
     [marqueeRect, finishMarquee],
   );
 
-  // 鎖定分組的拖曳連動：記錄拖曳開始當下每個成員的起始座標+算位移量，不是包進 Konva.Group，維持 shapes 陣列存絕對座標的既有模型。
+  // 鎖定分組拖曳連動：記錄開始當下每個成員的起始座標，再套用位移量
   const groupDragRef = useRef<{
     leadId: string;
     leadStart: { x: number; y: number };
-    // 不含 lead 自己；長度 0（沒有 groupId，或成員都被刪光）當成一般單一物件拖曳處理。
-    members: { id: string; x: number; y: number }[];
+    members: { id: string; x: number; y: number }[]; // 不含 lead 自己
   } | null>(null);
 
   const handleDragStart = useCallback(
@@ -215,7 +215,6 @@ export function useShapeSelection(): UseShapeSelectionResult {
       groupDragRef.current = {
         leadId: id,
         leadStart: { x: e.target.x(), y: e.target.y() },
-        // 起始座標優先讀 Konva node，圖片非同步載入完成前抓不到就退回 shape.x/y，仍留在名單裡讓 handleDragEnd 一起寫回，避免跟其他成員脫節。
         members: memberShapes.map((s) => {
           const node = shapeNodesRef.current.get(s.id);
           return { id: s.id, x: node ? node.x() : s.x, y: node ? node.y() : s.y };
@@ -229,14 +228,13 @@ export function useShapeSelection(): UseShapeSelectionResult {
     const dragState = groupDragRef.current;
     if (!dragState || dragState.leadId !== id || dragState.members.length === 0) return;
 
-    // 拖曳過程中直接操作其他成員的 Konva node（不透過 React/setShapes）維持即時視覺回饋，正式寫回 shapes 狀態等 handleDragEnd 一次批次做完。
+    // 直接操作其他成員的 Konva node，維持即時視覺回饋
     const deltaX = e.target.x() - dragState.leadStart.x;
     const deltaY = e.target.y() - dragState.leadStart.y;
     for (const member of dragState.members) {
       shapeNodesRef.current.get(member.id)?.position({ x: member.x + deltaX, y: member.y + deltaY });
     }
-    // node.position() 搬動不是 Konva 原生拖曳，不會觸發 Transformer 監聽的 dragmove，要手動叫它重算框的位置。
-    transformerRef.current?.forceUpdate();
+    transformerRef.current?.forceUpdate(); // 手動搬動不會觸發 Transformer 監聽的 dragmove
     e.target.getLayer()?.batchDraw();
   }, []);
 
@@ -245,7 +243,6 @@ export function useShapeSelection(): UseShapeSelectionResult {
       const dragState = groupDragRef.current;
       groupDragRef.current = null;
 
-      // x/y 統一只能整數。
       const leadPatch = { x: Math.round(e.target.x()), y: Math.round(e.target.y()) };
 
       if (!dragState || dragState.leadId !== id || dragState.members.length === 0) {
@@ -253,7 +250,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
         return;
       }
 
-      // 整組一次寫回，一次使用者拖曳操作只算一筆 undo entry，不是每個成員各推一筆。
+      // 整組一次寫回，只算一筆 undo entry
       const deltaX = e.target.x() - dragState.leadStart.x;
       const deltaY = e.target.y() - dragState.leadStart.y;
       updateShapes([
@@ -267,21 +264,20 @@ export function useShapeSelection(): UseShapeSelectionResult {
     [updateShape, updateShapes],
   );
 
+  // 縮放/旋轉結束後把 scale 重置回 1，改寫實際屬性
   const handleTransformEnd = useCallback(
     (id: string) => (e: KonvaEventObject<Event>) => {
       const node = e.target;
       const scaleX = node.scaleX();
       const scaleY = node.scaleY();
 
-      // 縮放結束一律把 scale 重置回 1，改寫 width/height（或 fontSize），避免下次拖曳疊加跑掉。
       node.scaleX(1);
       node.scaleY(1);
 
-      // 旋轉角度跟 x/y/width/height 一樣統一只存整數。
       const rotation = Math.round(node.rotation());
 
       if (node.getClassName() === "Text") {
-        // 文字鎖了 keepRatio，只用 scaleX 改 fontSize，不碰 width/height（TextShape 沒有這兩個欄位）。
+        // 文字只用 scaleX 改 fontSize
         const currentFontSize = (node as Konva.Text).fontSize();
         updateShape(id, {
           x: Math.round(node.x()),
@@ -293,7 +289,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
       }
 
       if (["Circle", "RegularPolygon", "Star"].includes(node.getClassName())) {
-        // 這三種都鎖了 keepRatio，scaleX === scaleY，node.width() 讀到的是「半徑 × 2」，只存一個 size，不像 rect/image 分開存 width/height。
+        // 這三種只存一個 size（半徑 × 2）
         const newSize = Math.max(Math.round(node.width() * scaleX), MIN_SHAPE_SIZE);
         updateShape(id, {
           x: Math.round(node.x()),
@@ -305,17 +301,16 @@ export function useShapeSelection(): UseShapeSelectionResult {
       }
 
       if (node.getClassName() === "Line") {
-        // Line 沒有實質的 width/height，縮放要直接對 points 陣列每個座標分別乘上 scaleX（偶數索引）/scaleY（奇數索引）。
+        // Line 沒有 width/height，改為縮放 points 座標
         const points = (node as Konva.Line).points();
         const newPoints = points.map((p, i) => Math.round(i % 2 === 0 ? p * scaleX : p * scaleY));
 
-        // 下限 clamp：只處理簡單兩點線段 [x1, y1, x2, y2]，把第二個端點沿原本方向往回拉到剛好 MIN_LINE_LENGTH。
+        // 兩點線段的下限 clamp，避免縮到消失
         if (newPoints.length === 4) {
           const dx = newPoints[2] - newPoints[0];
           const dy = newPoints[3] - newPoints[1];
           const length = Math.hypot(dx, dy);
           if (length < MIN_LINE_LENGTH) {
-            // 兩端點剛好重合（極端拖曳把 scale 壓到 0）時方向不存在，退回預設水平線。
             const [scaledDx, scaledDy] =
               length === 0 ? [MIN_LINE_LENGTH, 0] : [(dx / length) * MIN_LINE_LENGTH, (dy / length) * MIN_LINE_LENGTH];
             newPoints[2] = Math.round(newPoints[0] + scaledDx);
@@ -332,7 +327,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
         return;
       }
 
-      // x/y/width/height 統一只能整數，先 round 再 clamp 下限。
+      // 其餘（rect/image）：x/y/width/height 一律整數
       const width = Math.max(Math.round(node.width() * scaleX), MIN_SHAPE_SIZE);
       const height = Math.max(Math.round(node.height() * scaleY), MIN_SHAPE_SIZE);
       const patch: ShapePatch = {
@@ -343,10 +338,9 @@ export function useShapeSelection(): UseShapeSelectionResult {
         height,
       };
 
-      // 矩形縮放後 cornerRadius 可能超過新尺寸上限（不該超過短邊一半），趁縮放當下一併夾住。
+      // 矩形縮放後 cornerRadius 可能超過新尺寸上限，一併夾住
       const currentShape = shapes.find((shape) => shape.id === id);
       if (currentShape?.type === "rect") {
-        // Math.floor 讓上限保證是整數，避免奇數邊 /2 產生 .5 讓結果變非整數。
         const maxCornerRadius = Math.floor(Math.min(width, height) / 2);
         patch.cornerRadius = Math.min(currentShape.cornerRadius, maxCornerRadius);
       }

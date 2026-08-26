@@ -5,16 +5,51 @@ import { Circle, Layer, Line, Rect, RegularPolygon, Stage, Star, Text, Transform
 import type { KonvaEventObject } from "konva/lib/Node";
 import { useCanvas } from "../../../context/CanvasContext";
 import { useShapeSelection } from "../../../hooks/useShapeSelection";
+import { useFreehandDraw } from "../../../hooks/useFreehandDraw";
+import type { CanvasShape } from "../../../types/shape";
+import { ERASER_STROKE_COLOR } from "../../../constants/shapeConstraints";
 import { URLImage } from "./URLImage";
 
-// 滑鼠滾輪縮放已停用，這兩個常數只給 ResizeObserver 的 fit-scale 邏輯當上下限用。
+// ResizeObserver 的 fit-scale 上下限
 const MIN_SCALE = 0.2;
 const MAX_SCALE = 4;
-// 讓 800x800 畫布完整落在容器內時，四周留一點空間，這樣才看得到 canvas 的黑底邊界。
+// 讓畫布完整落在容器內時四周留一點邊
 const FIT_PADDING_RATIO = 0.9;
 
+interface LayerRun {
+  shapes: CanvasShape[];
+  isBrush: boolean;
+}
+
+// 把 shapes[] 依是否為畫筆切成連續區段，每段各自渲染成一個獨立 Konva Layer，讓畫筆塗層能交錯排序
+function buildLayerRuns(shapes: CanvasShape[]): LayerRun[] {
+  const runs: LayerRun[] = [];
+  for (const shape of shapes) {
+    const isBrush = shape.type === "brush";
+    const last = runs[runs.length - 1];
+    if (last && last.isBrush === isBrush) {
+      last.shapes.push(shape);
+    } else {
+      runs.push({ shapes: [shape], isBrush });
+    }
+  }
+  return runs;
+}
+
 export function KonvaBoard() {
-  const { shapes, canvasWidth, canvasHeight, containerRef } = useCanvas();
+  const {
+    shapes,
+    canvasWidth,
+    canvasHeight,
+    containerRef,
+    stageRef,
+    overlayLayerRef,
+    activeTool,
+    brushColor,
+    brushSize,
+    brushCap,
+    eraserSize,
+  } = useCanvas();
   const {
     marqueeRect,
     transformerRef,
@@ -28,10 +63,17 @@ export function KonvaBoard() {
     handleDragEnd,
     handleTransformEnd,
   } = useShapeSelection();
+  const {
+    previewStroke,
+    handleDrawMouseDown,
+    handleDrawMouseMove,
+    handleDrawMouseUp,
+  } = useFreehandDraw();
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
 
+  // 依容器尺寸即時計算畫布的 fit-scale 與置中位置
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -40,7 +82,6 @@ export function KonvaBoard() {
       const { width, height } = entry.contentRect;
       setStageSize({ width, height });
 
-      // 算出讓畫布完整放進容器並留一點邊的縮放比例，避免蓋滿容器看不到底色。
       const fitScale = Math.min(
         (width / canvasWidth) * FIT_PADDING_RATIO,
         (height / canvasHeight) * FIT_PADDING_RATIO,
@@ -55,22 +96,58 @@ export function KonvaBoard() {
     });
     observer.observe(el);
     return () => observer.disconnect();
-    // canvasWidth/canvasHeight 變動時也要重新 fit，不只容器 resize 時。
   }, [containerRef, canvasWidth, canvasHeight]);
 
+  // select 模式走選取/框選邏輯；brush/eraser 模式走自由繪圖邏輯，兩者互斥
+  const isDrawMode = activeTool !== "select";
+
+  // 一般 shape 跟畫筆筆畫共用的事件組裝
+  const buildCommonHandlers = (id: string) => ({
+    draggable: !isDrawMode, // 畫筆模式下停用拖曳/選取
+    onClick: isDrawMode ? undefined : (e: KonvaEventObject<MouseEvent>) => handleSelect(id, e),
+    onDragStart: handleDragStart(id),
+    onDragMove: handleDragMove(id),
+    onDragEnd: handleDragEnd(id),
+    onTransformEnd: handleTransformEnd(id),
+  });
+
+  const layerRuns = buildLayerRuns(shapes);
+  // 新筆畫會併入最後一個區段（如果它是畫筆類型），預覽線要畫在同一層，橡皮擦擦除效果才會即時可見
+  const lastRunIsBrush = layerRuns.length > 0 && layerRuns[layerRuns.length - 1].isBrush;
+
+  // 進行中、尚未提交的畫筆/橡皮擦預覽線
+  const previewLine = previewStroke && (
+    <Line
+      x={previewStroke.x}
+      y={previewStroke.y}
+      points={previewStroke.points}
+      stroke={activeTool === "eraser" ? ERASER_STROKE_COLOR : brushColor}
+      strokeWidth={activeTool === "eraser" ? eraserSize : brushSize}
+      lineCap={activeTool === "eraser" || brushCap === "round" ? "round" : "square"}
+      lineJoin={activeTool === "eraser" || brushCap === "round" ? "round" : "miter"}
+      globalCompositeOperation={activeTool === "eraser" ? "destination-out" : "source-over"}
+      listening={false}
+    />
+  );
+
   return (
-    <div ref={containerRef} style={{ width: "100%", height: "100%" }}>
+    <div
+      ref={containerRef}
+      style={{ width: "100%", height: "100%", cursor: isDrawMode ? "crosshair" : undefined }}
+    >
       <Stage
+        ref={stageRef}
         width={stageSize.width}
         height={stageSize.height}
         scaleX={scale}
         scaleY={scale}
         x={stagePos.x}
         y={stagePos.y}
-        onMouseDown={handleStageMouseDown}
-        onMouseMove={handleStageMouseMove}
-        onMouseUp={handleStageMouseUp}
+        onMouseDown={isDrawMode ? handleDrawMouseDown : handleStageMouseDown}
+        onMouseMove={isDrawMode ? handleDrawMouseMove : handleStageMouseMove}
+        onMouseUp={isDrawMode ? handleDrawMouseUp : handleStageMouseUp}
       >
+        {/* 背景層：永遠最底層，listening={false} 讓點擊穿透給 Stage 判斷「點到空白處」 */}
         <Layer>
           <Rect
             x={0}
@@ -80,136 +157,158 @@ export function KonvaBoard() {
             fill="#ffffff"
             stroke="#d1d5db"
             strokeWidth={1}
-            // 純背景 Rect，listening={false} 讓點擊穿透給 Stage 才能正確判斷「點到空白處」。
             listening={false}
           />
-          {shapes.map((shape) => {
-            const commonHandlers = {
-              draggable: true,
-              onClick: (e: KonvaEventObject<MouseEvent>) => handleSelect(shape.id, e),
-              onDragStart: handleDragStart(shape.id),
-              onDragMove: handleDragMove(shape.id),
-              onDragEnd: handleDragEnd(shape.id),
-              onTransformEnd: handleTransformEnd(shape.id),
-            };
+        </Layer>
 
-            if (shape.type === "text") {
+        {/* 依陣列順序把一般 shape/畫筆筆畫的連續區段各自拆成一個 Layer，讓圖層排序能真實反映到畫面 */}
+        {layerRuns.map((run, index) => (
+          // key 用領頭 shape id，不是陣列 index，避免交錯排序時圖片被誤判成新節點而重新載入閃爍
+          <Layer key={run.shapes[0].id}>
+            {run.shapes.map((shape) => {
+              const commonHandlers = buildCommonHandlers(shape.id);
+
+              if (shape.type === "brush") {
+                return (
+                  <Line
+                    key={shape.id}
+                    ref={registerShapeRef(shape.id)}
+                    name="freehand" // 跟一般直線區分控點樣式
+                    x={shape.x}
+                    y={shape.y}
+                    rotation={shape.rotation}
+                    points={shape.points}
+                    stroke={shape.stroke}
+                    strokeWidth={shape.strokeWidth}
+                    lineCap={shape.cap === "round" ? "round" : "square"}
+                    lineJoin={shape.cap === "round" ? "round" : "miter"}
+                    globalCompositeOperation={shape.tool === "eraser" ? "destination-out" : "source-over"}
+                    strokeScaleEnabled={false}
+                    {...commonHandlers}
+                  />
+                );
+              }
+
+              if (shape.type === "text") {
+                return (
+                  <Text
+                    key={shape.id}
+                    ref={registerShapeRef(shape.id)}
+                    x={shape.x}
+                    y={shape.y}
+                    rotation={shape.rotation}
+                    text={shape.text}
+                    fontSize={shape.fontSize}
+                    fill={shape.fill}
+                    fontStyle={shape.bold ? "bold" : "normal"}
+                    textDecoration={[shape.underline && "underline", shape.strikethrough && "line-through"]
+                      .filter(Boolean)
+                      .join(" ")}
+                    {...commonHandlers}
+                  />
+                );
+              }
+
+              if (shape.type === "image") {
+                return (
+                  <URLImage
+                    key={shape.id}
+                    ref={registerShapeRef(shape.id)}
+                    shape={shape}
+                    {...commonHandlers}
+                  />
+                );
+              }
+
+              if (shape.type === "circle") {
+                return (
+                  <Circle
+                    key={shape.id}
+                    ref={registerShapeRef(shape.id)}
+                    x={shape.x}
+                    y={shape.y}
+                    rotation={shape.rotation}
+                    radius={shape.size / 2}
+                    fill={shape.fill}
+                    {...commonHandlers}
+                  />
+                );
+              }
+
+              if (shape.type === "triangle") {
+                return (
+                  <RegularPolygon
+                    key={shape.id}
+                    ref={registerShapeRef(shape.id)}
+                    x={shape.x}
+                    y={shape.y}
+                    rotation={shape.rotation}
+                    sides={3}
+                    radius={shape.size / 2}
+                    fill={shape.fill}
+                    {...commonHandlers}
+                  />
+                );
+              }
+
+              if (shape.type === "star") {
+                return (
+                  <Star
+                    key={shape.id}
+                    ref={registerShapeRef(shape.id)}
+                    x={shape.x}
+                    y={shape.y}
+                    rotation={shape.rotation}
+                    numPoints={5}
+                    innerRadius={shape.size / 4}
+                    outerRadius={shape.size / 2}
+                    fill={shape.fill}
+                    {...commonHandlers}
+                  />
+                );
+              }
+
+              if (shape.type === "line") {
+                return (
+                  <Line
+                    key={shape.id}
+                    ref={registerShapeRef(shape.id)}
+                    x={shape.x}
+                    y={shape.y}
+                    rotation={shape.rotation}
+                    points={shape.points}
+                    stroke={shape.stroke}
+                    strokeWidth={shape.strokeWidth}
+                    dash={shape.dash}
+                    strokeScaleEnabled={false} // 避免縮放時筆畫粗細跟著視覺拉伸
+                    {...commonHandlers}
+                  />
+                );
+              }
+
               return (
-                <Text
+                <Rect
                   key={shape.id}
                   ref={registerShapeRef(shape.id)}
                   x={shape.x}
                   y={shape.y}
                   rotation={shape.rotation}
-                  text={shape.text}
-                  fontSize={shape.fontSize}
+                  width={shape.width}
+                  height={shape.height}
                   fill={shape.fill}
-                  fontStyle={shape.bold ? "bold" : "normal"}
-                  // Konva 用 .indexOf('underline')/.indexOf('line-through') 判斷，空白分隔可以同時套用兩種。
-                  textDecoration={[shape.underline && "underline", shape.strikethrough && "line-through"]
-                    .filter(Boolean)
-                    .join(" ")}
+                  cornerRadius={shape.cornerRadius}
                   {...commonHandlers}
                 />
               );
-            }
+            })}
+            {/* 最後一個區段是畫筆類型時，預覽線畫在這裡跟真正內容同一層 */}
+            {index === layerRuns.length - 1 && lastRunIsBrush && previewLine}
+          </Layer>
+        ))}
 
-            if (shape.type === "image") {
-              return (
-                <URLImage
-                  key={shape.id}
-                  ref={registerShapeRef(shape.id)}
-                  shape={shape}
-                  {...commonHandlers}
-                />
-              );
-            }
-
-            // circle/triangle/star 直接傳 radius/innerRadius/outerRadius，不透過 width/height 這層便利介面繞。
-            if (shape.type === "circle") {
-              return (
-                <Circle
-                  key={shape.id}
-                  ref={registerShapeRef(shape.id)}
-                  x={shape.x}
-                  y={shape.y}
-                  rotation={shape.rotation}
-                  radius={shape.size / 2}
-                  fill={shape.fill}
-                  {...commonHandlers}
-                />
-              );
-            }
-
-            if (shape.type === "triangle") {
-              return (
-                <RegularPolygon
-                  key={shape.id}
-                  ref={registerShapeRef(shape.id)}
-                  x={shape.x}
-                  y={shape.y}
-                  rotation={shape.rotation}
-                  sides={3}
-                  radius={shape.size / 2}
-                  fill={shape.fill}
-                  {...commonHandlers}
-                />
-              );
-            }
-
-            if (shape.type === "star") {
-              return (
-                <Star
-                  key={shape.id}
-                  ref={registerShapeRef(shape.id)}
-                  x={shape.x}
-                  y={shape.y}
-                  rotation={shape.rotation}
-                  numPoints={5}
-                  innerRadius={shape.size / 4}
-                  outerRadius={shape.size / 2}
-                  fill={shape.fill}
-                  {...commonHandlers}
-                />
-              );
-            }
-
-            if (shape.type === "line") {
-              return (
-                <Line
-                  key={shape.id}
-                  ref={registerShapeRef(shape.id)}
-                  x={shape.x}
-                  y={shape.y}
-                  rotation={shape.rotation}
-                  points={shape.points}
-                  stroke={shape.stroke}
-                  strokeWidth={shape.strokeWidth}
-                  dash={shape.dash}
-                  // Konva 預設縮放時筆畫粗細會跟著視覺拉伸，關掉這個讓拖曳中筆畫粗細維持恆定，跟放開後一致。
-                  strokeScaleEnabled={false}
-                  {...commonHandlers}
-                />
-              );
-            }
-
-            return (
-              <Rect
-                key={shape.id}
-                ref={registerShapeRef(shape.id)}
-                x={shape.x}
-                y={shape.y}
-                rotation={shape.rotation}
-                width={shape.width}
-                height={shape.height}
-                fill={shape.fill}
-                cornerRadius={shape.cornerRadius}
-                {...commonHandlers}
-              />
-            );
-          })}
+        {/* UI 覆蓋層：永遠最上層，放框選提示/Transformer/畫筆預覽線，匯出前會暫時隱藏 */}
+        <Layer ref={overlayLayerRef}>
           {marqueeRect && (
-            // 框選中的視覺提示，純視覺不接事件；放開滑鼠後（見 handleStageMouseUp）就會消失。
             <Rect
               x={marqueeRect.x}
               y={marqueeRect.y}
@@ -221,6 +320,7 @@ export function KonvaBoard() {
               listening={false}
             />
           )}
+          {!lastRunIsBrush && previewLine}
           <Transformer ref={transformerRef} rotateEnabled />
         </Layer>
       </Stage>

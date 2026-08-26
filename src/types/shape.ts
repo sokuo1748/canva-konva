@@ -1,3 +1,4 @@
+// 矩形
 export interface RectShape {
   id: string;
   type: "rect";
@@ -8,11 +9,10 @@ export interface RectShape {
   fill: string;
   cornerRadius: number;
   rotation: number;
-  // 有值代表這個 shape 被鎖定進某個圖層群組，圖層清單會框在一起顯示、畫布拖曳同組成員會連動移動（縮放/旋轉沒有群組連動）。
-  groupId?: string;
+  groupId?: string; // 有值代表被鎖定進某個圖層群組
 }
 
-// 沒有 width/height：Konva.Text 依內容自動算寬高，縮放透過 fontSize 處理；bold/underline/strikethrough 不設定就是 undefined，KonvaBoard.tsx 組成 Konva 的 fontStyle/textDecoration。
+// 文字（Konva.Text 依內容自動算寬高，沒有 width/height）
 export interface TextShape {
   id: string;
   type: "text";
@@ -28,7 +28,7 @@ export interface TextShape {
   strikethrough?: boolean;
 }
 
-// src 存 base64 data URL（不是 blob URL），才能被 getSnapshot() 正常序列化保存。
+// 圖片（src 存 base64 data URL，才能被 getSnapshot() 序列化保存）
 export interface ImageShape {
   id: string;
   type: "image";
@@ -41,7 +41,7 @@ export interface ImageShape {
   groupId?: string;
 }
 
-// Circle/RegularPolygon/Star 在 Konva 裡的 width/height 都綁死同一顆半徑換算，寬高沒辦法真的獨立，只存一個 size（直徑），縮放時強制 keepRatio；x/y 是形狀中心點，不是 Rect/Image/Text 那樣的左上角。
+// 圓形（只存 size 直徑，x/y 是中心點）
 export interface CircleShape {
   id: string;
   type: "circle";
@@ -53,7 +53,7 @@ export interface CircleShape {
   groupId?: string;
 }
 
-// 三角形是 Konva.RegularPolygon（sides 固定 3，正三角形），x/y 語意跟 CircleShape 一樣是中心點。
+// 三角形（Konva.RegularPolygon，sides 固定 3，x/y 是中心點）
 export interface TriangleShape {
   id: string;
   type: "triangle";
@@ -65,7 +65,7 @@ export interface TriangleShape {
   groupId?: string;
 }
 
-// numPoints/內外半徑比例目前不開放調整（固定 5 點星，比例寫死在 KonvaBoard.tsx），x/y 語意跟 CircleShape 一樣是中心點。
+// 星形（固定 5 點，x/y 是中心點）
 export interface StarShape {
   id: string;
   type: "star";
@@ -77,7 +77,7 @@ export interface StarShape {
   groupId?: string;
 }
 
-// Konva.Line 沒有實質的 width/height，縮放要直接改 points 陣列；points 是相對 (x, y) 的本地座標，(x, y) 是線段起點；dash 沒值是實線、有值是虛線，直線跟虛線是同一個型別。
+// 直線/虛線（points 是相對 x/y 的本地座標，x/y 是線段起點，dash 有值才是虛線）
 export interface LineShape {
   id: string;
   type: "line";
@@ -91,9 +91,35 @@ export interface LineShape {
   groupId?: string;
 }
 
-export type CanvasShape = RectShape | ImageShape | TextShape | CircleShape | TriangleShape | StarShape | LineShape;
+export type BrushToolKind = "brush" | "eraser";
+export type BrushCap = "round" | "square"; // 筆刷頭部形狀
 
-// 手寫攤平型別（不是 Omit<...> 交集推導，那樣算出來是聯集不是共同欄位），代價是編譯期不擋跨型別誤傳欄位。
+// 畫筆/橡皮擦自由路徑，tool 為 eraser 時渲染會套用 destination-out 合成擦除
+export interface BrushShape {
+  id: string;
+  type: "brush";
+  x: number;
+  y: number;
+  points: number[];
+  stroke: string;
+  strokeWidth: number;
+  cap: BrushCap;
+  tool: BrushToolKind;
+  rotation: number;
+  groupId?: string;
+}
+
+export type CanvasShape =
+  | RectShape
+  | ImageShape
+  | TextShape
+  | CircleShape
+  | TriangleShape
+  | StarShape
+  | LineShape
+  | BrushShape;
+
+// 更新物件屬性用的攤平型別，各欄位皆為 optional
 export type ShapePatch = Partial<{
   x: number;
   y: number;
@@ -111,11 +137,13 @@ export type ShapePatch = Partial<{
   stroke: string;
   strokeWidth: number;
   dash: number[];
+  cap: BrushCap;
   bold: boolean;
   underline: boolean;
   strikethrough: boolean;
 }>;
 
+// undo/redo 用的畫布快照
 export interface CanvasSnapshot {
   shapes: CanvasShape[];
   canvasWidth: number;

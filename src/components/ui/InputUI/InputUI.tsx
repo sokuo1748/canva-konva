@@ -7,6 +7,7 @@ interface InputUIProps extends InputHTMLAttributes<HTMLInputElement> {
   height?: number | string;
 }
 
+// 共用的原生 input 樣式包裝
 export const InputUI = forwardRef<HTMLInputElement, InputUIProps>(function InputUI(
   { width, height, style, ...rest },
   ref,

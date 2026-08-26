@@ -13,16 +13,16 @@ import { ButtonUI } from "../../ui/ButtonUI/ButtonUI";
 import { IconButtonUI } from "../../ui/IconButtonUI/IconButtonUI";
 import { useCanvas } from "../../../context/CanvasContext";
 import { ExportModal } from "../ExportModal/ExportModal";
+import { CanvasSizeInput } from "./CanvasSizeInput";
 import styles from "./Toolbar.module.scss";
 
 export function Toolbar() {
   const { resetCanvas, undo, redo, canUndo, canRedo, selectedIds, shapes, lockShapes, unlockShapes } =
     useCanvas();
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  // useCallback 保持函式參考穩定，避免 Modal 開著時 Escape 監聽被不必要地重掛。
   const closeExportModal = useCallback(() => setIsExportModalOpen(false), []);
 
-  // 目前選取是否剛好是某個既有群組的全部成員——是的話顯示 LockOpen 讓使用者解除，否則顯示 Lock 重新鎖成新群組。
+  // 目前選取是否剛好是某個既有群組的全部成員
   const isExactlyOneWholeGroup =
     selectedIds.length >= 2 &&
     (() => {
@@ -69,6 +69,7 @@ export function Toolbar() {
           ))}
       </div>
       <div className={styles.group}>
+        <CanvasSizeInput />
         <ButtonUI
           name="Export"
           icon={<IconFileExport size={20} />}
@@ -78,7 +79,6 @@ export function Toolbar() {
           onClick={() => setIsExportModalOpen(true)}
         />
       </div>
-      {/* key 隨 open 切換，重新打開就是全新實例，filename state 自動歸零。 */}
       <ExportModal key={String(isExportModalOpen)} open={isExportModalOpen} onClose={closeExportModal} />
     </div>
   );

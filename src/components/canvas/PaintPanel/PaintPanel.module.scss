@@ -1,0 +1,13 @@
+@use "../../../styles/global" as *;
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+// 工具切換（畫筆/橡皮擦）跟筆刷形狀切換共用同一種排列，比照 ShapePropertiesForm.tsx 的 toggleRow。
+.toolRow {
+  display: flex;
+  gap: 4px;
+}

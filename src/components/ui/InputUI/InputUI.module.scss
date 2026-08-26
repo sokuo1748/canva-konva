@@ -14,4 +14,15 @@
     outline: 2px solid $color-button-outline-border;
     outline-offset: -1px;
   }
+
+  // 隱藏原生上下箭頭：寬度在不同瀏覽器/作業系統差異很大且無法從 CSS 精準量測，是
+  // CanvasSizeInput.tsx 動態算寬度時內容被裁切的主因之一；拿掉之後空間更穩定可預期。
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  &[type="number"] {
+    -moz-appearance: textfield;
+  }
 }

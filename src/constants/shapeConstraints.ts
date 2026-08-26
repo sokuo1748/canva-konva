@@ -1,3 +1,16 @@
-// Transformer 縮放邏輯跟屬性面板輸入框共用同一份下限，避免各自維護、將來不同步。
+// 一般 shape 尺寸/字級下限
 export const MIN_SHAPE_SIZE = 1;
 export const MIN_FONT_SIZE = 8;
+
+// 畫筆/橡皮擦大小上下限，各自獨立
+export const MIN_BRUSH_SIZE = 1;
+export const MAX_BRUSH_SIZE = 100;
+export const MIN_ERASER_SIZE = 1;
+export const MAX_ERASER_SIZE = 150;
+
+// 橡皮擦筆畫顏色，視覺上不重要（destination-out 合成看不到顏色）
+export const ERASER_STROKE_COLOR = "#000000";
+
+// 畫布尺寸上下限
+export const MIN_CANVAS_SIZE = 100;
+export const MAX_CANVAS_SIZE = 4000;
