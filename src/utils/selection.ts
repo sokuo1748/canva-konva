@@ -1,10 +1,6 @@
-// 純函式、不依賴 Konva 或 React：canvas 的 shape 點擊跟圖層清單的 row 點擊都靠這兩支函式決定要不要加選/取消選。
+// 選取切換的純函式，畫布點擊跟圖層清單點擊共用
 
-/**
- * 依 additive 決定：false 時直接取代成 ids（單一 shape 傳 [id]，鎖定分組傳整組成員 id）；
- * true 時把 ids 當一個整體加入/移出目前選取——ids 全部都已經在目前選取裡才視為「已選中」
- * 而移除，否則（不管原本有沒有部分命中）視為加選，把還沒選到的部分補齊。
- */
+// additive 為 false 直接取代選取；true 時把 ids 當整體加入/移出
 export function toggleSelection(currentIds: string[], ids: string[], additive: boolean): string[] {
   if (!additive) return ids;
   const allSelected = ids.every((id) => currentIds.includes(id));
@@ -13,7 +9,7 @@ export function toggleSelection(currentIds: string[], ids: string[], additive: b
     : [...currentIds, ...ids.filter((id) => !currentIds.includes(id))];
 }
 
-/** Konva 的 KonvaEventObject["evt"] 跟 React 的 MouseEvent 都有這三個欄位，結構相容即可共用。 */
+// 是否為 shift/ctrl/cmd 加選點擊
 export function isAdditiveClick(evt: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }): boolean {
   return evt.shiftKey || evt.ctrlKey || evt.metaKey;
 }

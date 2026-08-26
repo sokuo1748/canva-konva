@@ -9,7 +9,7 @@ interface ColorFieldProps {
   onCommit: (value: string) => void;
 }
 
-// 不經過 useFieldDraft：原生 color picker 是選定即觸發的離散互動，onChange 直接 commit 即可。
+// 顏色屬性欄位，onChange 直接 commit（不經過 useFieldDraft）
 export function ColorField({ label, value, onCommit }: ColorFieldProps) {
   return (
     <label className={styles.field}>

@@ -1,0 +1,22 @@
+@use "../../../styles/global" as *;
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+// 橫式：文字標籤在左、輸入框在右，跟 NumberField.module.scss 的直式 .field（label 在上）刻意不同，
+// 這裡是給只有一行高度的 Toolbar 用。
+.field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+// Toolbar 背景是深色，跟 IconButtonUI 的 icon 顏色一致用 $color-text-inverse，不是給一般面板用的 $color-text。
+.label,
+.separator {
+  color: $color-text-inverse;
+  font-size: $font-size-base;
+}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-// 本地 draft，blur/Enter 才 commit，避免逐字元灌爆 undo history；沒 focus 時永遠顯示外部最新 value。
+// 本地 draft，blur/Enter 才 commit，避免逐字元灌爆 undo history
 export function useFieldDraft<T>(
   value: T,
   serialize: (value: T) => string,
@@ -23,15 +23,13 @@ export function useFieldDraft<T>(
     setDraft(raw);
   };
 
-  // keepEditing：TextField 的 Enter 送出內容但不失焦，靠 isEditing 保持 true 避免 controlled textarea 把新內容彈掉。
+  // keepEditing：TextField 的 Enter 送出內容但不失焦
   const commit = (options?: { keepEditing?: boolean }) => {
     if (!options?.keepEditing) setIsEditing(false);
 
     const parsed = parseValue(draft);
-    // 無效輸入放棄 commit，isEditing 變 false 後畫面自動還原成目前的真實值。
-    if (parsed === null) return;
-    // 值沒真的改變就不 commit，避免多推一筆沒意義的 undo history。
-    if (parsed !== value) onCommit(parsed);
+    if (parsed === null) return; // 無效輸入放棄 commit
+    if (parsed !== value) onCommit(parsed); // 值沒變就不 commit
   };
 
   return { displayValue, handleFocus, handleChange, commit };

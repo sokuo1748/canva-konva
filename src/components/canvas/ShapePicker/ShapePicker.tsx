@@ -14,21 +14,20 @@ interface ShapePickerOption {
   onSelect: () => void;
 }
 
-// 點 Shape 按鈕後 panelRight 顯示的圖形選單（見 SelectedShapePanel.tsx 的 isShapePickerOpen 分流）；直線／虛線是同一個 addLine，差別只在傳入的 dashed 參數。
+// Shape 按鈕點下去後顯示的圖形選單
 export function ShapePicker() {
   const { addSquare, addCircle, addTriangle, addStar, addLine, setIsShapePickerOpen } = useCanvas();
 
-  // 前五個選項的圖示拿 SHAPE_TYPE_ICONS（選單顯示「Square」但底層 type 是 "rect"，沿用既有命名落差）；IconLineDashed 是虛線選項專用，不屬於 SHAPE_TYPE_ICONS 職責範圍。
   const options: ShapePickerOption[] = [
-    { id: "square", name: "Square", icon: SHAPE_TYPE_ICONS.rect, onSelect: addSquare },
-    { id: "circle", name: "Circle", icon: SHAPE_TYPE_ICONS.circle, onSelect: addCircle },
-    { id: "triangle", name: "Triangle", icon: SHAPE_TYPE_ICONS.triangle, onSelect: addTriangle },
-    { id: "star", name: "Star", icon: SHAPE_TYPE_ICONS.star, onSelect: addStar },
-    { id: "line", name: "Line", icon: SHAPE_TYPE_ICONS.line, onSelect: () => addLine(false) },
-    { id: "dashedLine", name: "Dashed Line", icon: IconLineDashed, onSelect: () => addLine(true) },
+    { id: "square", name: "Square", icon: SHAPE_TYPE_ICONS.rect, onSelect: addSquare }, // 新增正方形
+    { id: "circle", name: "Circle", icon: SHAPE_TYPE_ICONS.circle, onSelect: addCircle }, // 新增圓形
+    { id: "triangle", name: "Triangle", icon: SHAPE_TYPE_ICONS.triangle, onSelect: addTriangle }, // 新增三角形
+    { id: "star", name: "Star", icon: SHAPE_TYPE_ICONS.star, onSelect: addStar }, // 新增星形
+    { id: "line", name: "Line", icon: SHAPE_TYPE_ICONS.line, onSelect: () => addLine(false) }, // 新增直線
+    { id: "dashedLine", name: "Dashed Line", icon: IconLineDashed, onSelect: () => addLine(true) }, // 新增虛線
   ];
 
-  // 新增動作本身已經會 setSelectedIds([id]) 自動選取剛插入的物件，選單關閉後 panelRight 自然接著顯示新物件的屬性表單。
+  // 新增物件後關閉選單
   const handleSelect = (onSelect: () => void) => {
     onSelect();
     setIsShapePickerOpen(false);

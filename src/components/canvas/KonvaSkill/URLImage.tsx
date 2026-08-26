@@ -16,19 +16,28 @@ interface URLImageProps {
   onTransformEnd?: (e: KonvaEventObject<Event>) => void;
 }
 
-// react-konva 的 <Image> 要吃已載入好的 HTMLImageElement，載入完成前先不渲染。
+// 快取已載入完成的圖片，remount 時（例如交錯排序切換 Layer）避免重新載入閃爍
+const imageCache = new Map<string, HTMLImageElement>();
+
+// 依 src 非同步載入圖片，載入完成前不渲染
 export const URLImage = forwardRef<Konva.Image, URLImageProps>(function URLImage(
   { shape, ...handlers },
   ref,
 ) {
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [image, setImage] = useState<HTMLImageElement | null>(() => imageCache.get(shape.src) ?? null);
 
   useEffect(() => {
-    // 避免 unmount 後或 src 變動後，舊的非同步載入才 setState（Strict Mode 下容易觸發）。
-    let cancelled = false;
+    const cached = imageCache.get(shape.src);
+    if (cached) {
+      setImage(cached);
+      return;
+    }
+
+    let cancelled = false; // 避免 unmount 後才 setState
 
     const img = new window.Image();
     img.onload = () => {
+      imageCache.set(shape.src, img);
       if (!cancelled) setImage(img);
     };
     img.onerror = () => {

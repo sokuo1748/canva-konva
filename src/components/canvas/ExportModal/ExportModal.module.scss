@@ -1,0 +1,18 @@
+@use "../../../styles/global" as *;
+
+// 等比縮圖即可，這只是「下載前確認長怎樣」，不是完整尺寸的圖片編輯器，避免大尺寸畫布把 360px 寬的
+// Modal 撐爆。
+.preview {
+  max-width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border: 1px solid $color-border;
+  border-radius: $radius-base;
+}
+
+// 跟 NumberField.module.scss 的 .label 同一種「次要文字」處理，不新發明顏色 token。
+.previewError {
+  font-size: $font-size-base;
+  color: $color-text;
+  opacity: 0.6;
+}
