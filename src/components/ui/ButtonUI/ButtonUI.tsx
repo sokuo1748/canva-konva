@@ -16,7 +16,7 @@ interface ButtonUIProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "n
   width?: number | string;
   height?: number | string;
   selectedStyle?: ButtonSelectedStyle;
-  active?: boolean; // opt-in：套用提醒色疊加樣式，代表「目前正處於某種模式中」
+  active?: boolean; // opt-in：套用既有靛藍 accent 的疊加樣式，代表「目前正處於某種模式中」
 }
 
 // 圖示+文字按鈕
