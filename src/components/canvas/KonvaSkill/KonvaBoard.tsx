@@ -230,8 +230,8 @@ export function KonvaBoard() {
                     rotation={shape.rotation}
                     radius={shape.size / 2}
                     fill={shape.fill}
-                    stroke={shape.stroke}
-                    strokeWidth={shape.strokeWidth}
+                    stroke={shape.strokeEnabled ? shape.stroke : undefined}
+                    strokeWidth={shape.strokeEnabled ? shape.strokeWidth : undefined}
                     strokeScaleEnabled={false} // 避免縮放時邊框粗細跟著視覺拉伸
                     {...commonHandlers}
                   />
@@ -249,8 +249,8 @@ export function KonvaBoard() {
                     sides={3}
                     radius={shape.size / 2}
                     fill={shape.fill}
-                    stroke={shape.stroke}
-                    strokeWidth={shape.strokeWidth}
+                    stroke={shape.strokeEnabled ? shape.stroke : undefined}
+                    strokeWidth={shape.strokeEnabled ? shape.strokeWidth : undefined}
                     strokeScaleEnabled={false}
                     {...commonHandlers}
                   />
@@ -269,8 +269,8 @@ export function KonvaBoard() {
                     innerRadius={shape.size / 4}
                     outerRadius={shape.size / 2}
                     fill={shape.fill}
-                    stroke={shape.stroke}
-                    strokeWidth={shape.strokeWidth}
+                    stroke={shape.strokeEnabled ? shape.stroke : undefined}
+                    strokeWidth={shape.strokeEnabled ? shape.strokeWidth : undefined}
                     strokeScaleEnabled={false}
                     {...commonHandlers}
                   />
@@ -306,8 +306,8 @@ export function KonvaBoard() {
                   height={shape.height}
                   fill={shape.fill}
                   cornerRadius={shape.cornerRadius}
-                  stroke={shape.stroke}
-                  strokeWidth={shape.strokeWidth}
+                  stroke={shape.strokeEnabled ? shape.stroke : undefined}
+                  strokeWidth={shape.strokeEnabled ? shape.strokeWidth : undefined}
                   strokeScaleEnabled={false} // 避免縮放時邊框粗細跟著視覺拉伸
                   {...commonHandlers}
                 />

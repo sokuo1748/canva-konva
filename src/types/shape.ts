@@ -10,8 +10,9 @@ export interface RectShape {
   cornerRadius: number;
   rotation: number;
   groupId?: string; // 有值代表被鎖定進某個圖層群組
-  stroke?: string; // 邊框顏色
-  strokeWidth?: number; // 邊框粗度，0（預設）代表不顯示邊框
+  stroke: string; // 邊框顏色
+  strokeWidth: number; // 邊框粗度
+  strokeEnabled: boolean; // 是否顯示邊框，取代原本用 strokeWidth: 0 表示不顯示的隱性寫法
 }
 
 // 文字（Konva.Text 依內容自動算寬高，沒有 width/height）
@@ -53,8 +54,9 @@ export interface CircleShape {
   fill: string;
   rotation: number;
   groupId?: string;
-  stroke?: string; // 邊框顏色
-  strokeWidth?: number; // 邊框粗度，0（預設）代表不顯示邊框
+  stroke: string; // 邊框顏色
+  strokeWidth: number; // 邊框粗度
+  strokeEnabled: boolean; // 是否顯示邊框，取代原本用 strokeWidth: 0 表示不顯示的隱性寫法
 }
 
 // 三角形（Konva.RegularPolygon，sides 固定 3，x/y 是中心點）
@@ -67,8 +69,9 @@ export interface TriangleShape {
   fill: string;
   rotation: number;
   groupId?: string;
-  stroke?: string; // 邊框顏色
-  strokeWidth?: number; // 邊框粗度，0（預設）代表不顯示邊框
+  stroke: string; // 邊框顏色
+  strokeWidth: number; // 邊框粗度
+  strokeEnabled: boolean; // 是否顯示邊框，取代原本用 strokeWidth: 0 表示不顯示的隱性寫法
 }
 
 // 星形（固定 5 點，x/y 是中心點）
@@ -81,8 +84,9 @@ export interface StarShape {
   fill: string;
   rotation: number;
   groupId?: string;
-  stroke?: string; // 邊框顏色
-  strokeWidth?: number; // 邊框粗度，0（預設）代表不顯示邊框
+  stroke: string; // 邊框顏色
+  strokeWidth: number; // 邊框粗度
+  strokeEnabled: boolean; // 是否顯示邊框，取代原本用 strokeWidth: 0 表示不顯示的隱性寫法
 }
 
 // 直線/虛線（points 是相對 x/y 的本地座標，x/y 是線段起點，dash 有值才是虛線）
@@ -144,6 +148,7 @@ export type ShapePatch = Partial<{
   points: number[];
   stroke: string;
   strokeWidth: number;
+  strokeEnabled: boolean;
   dash: number[];
   cap: BrushCap;
   bold: boolean;

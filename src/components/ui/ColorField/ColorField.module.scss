@@ -11,3 +11,8 @@
   color: $color-text;
   opacity: 0.6;
 }
+
+// 視覺上降低存在感（例如 strokeEnabled 關閉），選色功能仍然正常，不用原生 disabled 擋互動
+.muted {
+  opacity: 0.5;
+}

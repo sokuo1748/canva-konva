@@ -1,6 +1,6 @@
 "use client";
 
-import { IconBold, IconStrikethrough, IconUnderline } from "@tabler/icons-react";
+import { IconBold, IconBorderOuter, IconStrikethrough, IconUnderline } from "@tabler/icons-react";
 import { useCanvas } from "../../../context/CanvasContext";
 import type { CanvasShape, ShapePatch } from "../../../types/shape";
 import {
@@ -83,19 +83,30 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
         <ColorField label="fill" value={shape.fill} onCommit={(v) => commit({ fill: v })} />
       )}
 
-      {/* Rect/Circle/Triangle/Star 的邊框設定，strokeWidth 下限 0（等同不顯示邊框） */}
+      {/* Rect/Circle/Triangle/Star 的邊框設定：strokeEnabled 是明確的顯示開關，
+          不再用 strokeWidth: 0 表示不顯示（見 CLAUDE.md 這輪的變更說明） */}
       {(shape.type === "rect" || shape.type === "circle" || shape.type === "triangle" || shape.type === "star") && (
         <>
+          <div className={styles.toggleRow}>
+            <IconButtonUI
+              icon={<IconBorderOuter size={18} />}
+              label="Show border"
+              active={shape.strokeEnabled}
+              onClick={() => commit({ strokeEnabled: !shape.strokeEnabled })}
+            />
+          </div>
           <ColorField
             label="stroke"
-            value={shape.stroke ?? "#000000"}
+            value={shape.stroke}
+            muted={!shape.strokeEnabled}
             onCommit={(v) => commit({ stroke: v })}
           />
           <NumberField
             label="strokeWidth"
-            value={shape.strokeWidth ?? 0}
+            value={shape.strokeWidth}
             min={0}
             round
+            muted={!shape.strokeEnabled}
             onCommit={(v) => commit({ strokeWidth: v })}
           />
         </>
