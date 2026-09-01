@@ -10,6 +10,18 @@
   overflow: hidden;
   color: $color-text-inverse;
   font-size: $font-size-base;
+  // panelRight（CanvasWorkspace.module.scss 的 .panel）是 flex column 且有固定高度
+  // （由 .body 的 flex row + align-items:stretch 撐出來），這個 pill 是它的 flex item。
+  // 因為上面的 overflow:hidden（圓角裁切必須），這個元素在 flex 主軸（垂直）上的
+  // automatic minimum size 會被瀏覽器算成 0（CSS Flexbox 規格：overflow 非 visible
+  // 的 flex item，自動最小尺寸是 0，不是 min-content）——一旦下面的
+  // ShapePropertiesForm（新增 stroke/border toggle 欄位後變更高）撐爆 panelRight
+  // 的可視高度，flex-shrink 預設值 1 就會優先把「floor 是 0」的這個 pill 往 0 壓，
+  // 而不是讓 panelRight 自己捲動（表單 .form 沒有 overflow:hidden，min-height 是
+  // content-based，撐不動就不太會被壓，於是壓力全部轉嫁到這個 pill 上）。
+  // flex-shrink: 0 讓這個 pill 永遠維持自然高度，多出來的內容交給 panelRight
+  // 既有的 overflow-y: auto 捲動處理，不會再被擠壓/跑版/消失。
+  flex-shrink: 0;
 }
 
 .label,
