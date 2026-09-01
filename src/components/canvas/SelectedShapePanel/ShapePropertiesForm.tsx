@@ -1,6 +1,6 @@
 "use client";
 
-import { IconBold, IconStrikethrough, IconUnderline } from "@tabler/icons-react";
+import { IconAspectRatio, IconBold, IconStrikethrough, IconUnderline } from "@tabler/icons-react";
 import { useCanvas } from "../../../context/CanvasContext";
 import type { CanvasShape, ShapePatch } from "../../../types/shape";
 import {
@@ -30,7 +30,9 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
       <NumberField label="y" value={shape.y} round onCommit={(v) => commit({ y: v })} />
       <NumberField label="rotation" value={shape.rotation} round onCommit={(v) => commit({ rotation: v })} />
 
-      {(shape.type === "rect" || shape.type === "image") && (
+      {/* rect/image/circle/triangle 都有獨立的 width/height，可以自由（非等比）拉伸；
+          circle/triangle 這次改成跟 rect/image 一樣存兩個獨立欄位，不再只存單一 size（見 CLAUDE.md） */}
+      {(shape.type === "rect" || shape.type === "image" || shape.type === "circle" || shape.type === "triangle") && (
         <>
           <NumberField
             label="width"
@@ -46,11 +48,19 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
             round
             onCommit={(v) => commit({ height: v })}
           />
+          <div className={styles.toggleRow}>
+            <IconButtonUI
+              icon={<IconAspectRatio size={18} />}
+              label="鎖定高寬比"
+              active={shape.lockAspectRatio}
+              onClick={() => commit({ lockAspectRatio: !shape.lockAspectRatio })}
+            />
+          </div>
         </>
       )}
 
-      {/* circle/triangle/star 只存一個 size，width/height 兩欄位背後讀寫同一個值 */}
-      {(shape.type === "circle" || shape.type === "triangle" || shape.type === "star") && (
+      {/* 星形這次不開放拉伸，只存一個 size，width/height 兩欄位背後讀寫同一個值 */}
+      {shape.type === "star" && (
         <>
           <NumberField
             label="width"

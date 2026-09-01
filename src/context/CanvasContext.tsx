@@ -30,6 +30,9 @@ const DEFAULT_BRUSH_SIZE = 8;
 const DEFAULT_BRUSH_CAP: BrushCap = "round";
 const DEFAULT_ERASER_SIZE = 20;
 
+// 對齊模式：靠左/水平置中/靠右/靠上/垂直置中/靠下，各自獨立對齊到畫布邊界，不是選取物件互相對齊
+export type AlignMode = "left" | "center-h" | "right" | "top" | "center-v" | "bottom";
+
 interface CanvasContextValue {
   shapes: CanvasShape[]; // 畫布上所有物件
   addSquare: () => void; // 新增正方形
@@ -51,6 +54,7 @@ interface CanvasContextValue {
   }) => void;
   updateShape: (id: string, patch: ShapePatch) => void; // 更新單一物件屬性
   updateShapes: (patches: { id: string; patch: ShapePatch }[]) => void; // 批次更新多個物件屬性
+  alignShapes: (ids: string[], mode: AlignMode) => void; // 對齊選取物件到畫布邊界/中心
   reorderShapes: (orderedIds: string[]) => void; // 依圖層清單拖曳結果重新排序
   deleteShape: (id: string) => void; // 刪除單一物件
   deleteShapes: (ids: string[]) => void; // 批次刪除多個物件
@@ -191,6 +195,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         fill: "#000000",
         cornerRadius: SQUARE_DEFAULT_CORNER_RADIUS,
         rotation: DEFAULT_ROTATION,
+        lockAspectRatio: false,
       },
     ]);
     setSelectedIds([id]);
@@ -243,6 +248,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
           height,
           src,
           rotation: DEFAULT_ROTATION,
+          lockAspectRatio: false,
         },
       ]);
       setSelectedIds([id]);
@@ -251,7 +257,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [canvasWidth, canvasHeight, nextId, pushHistoryEntry, setSelectedIds],
   );
 
-  // 新增圓形（x/y 是中心點）
+  // 新增圓形（x/y 是中心點；width/height 可獨立拉伸成橢圓，見 CLAUDE.md）
   const addCircle = useCallback(() => {
     pushHistoryEntry();
     const id = nextId("circle");
@@ -262,16 +268,18 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         type: "circle",
         x: canvasWidth / 2,
         y: canvasHeight / 2,
-        size: SHAPE_DEFAULT_SIZE,
+        width: SHAPE_DEFAULT_SIZE,
+        height: SHAPE_DEFAULT_SIZE,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
+        lockAspectRatio: false,
       },
     ]);
     setSelectedIds([id]);
     setActiveId(id);
   }, [canvasWidth, canvasHeight, nextId, pushHistoryEntry, setSelectedIds]);
 
-  // 新增三角形（x/y 是中心點）
+  // 新增三角形（x/y 是中心點；width/height 可獨立拉伸成不等邊，見 CLAUDE.md）
   const addTriangle = useCallback(() => {
     pushHistoryEntry();
     const id = nextId("triangle");
@@ -282,9 +290,11 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         type: "triangle",
         x: canvasWidth / 2,
         y: canvasHeight / 2,
-        size: SHAPE_DEFAULT_SIZE,
+        width: SHAPE_DEFAULT_SIZE,
+        height: SHAPE_DEFAULT_SIZE,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
+        lockAspectRatio: false,
       },
     ]);
     setSelectedIds([id]);
@@ -393,6 +403,56 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       );
     },
     [pushHistoryEntry],
+  );
+
+  // 對齊選取物件到畫布邊界/中心，各自獨立對齊（不是選取物件互相對齊），一次操作只推一筆 history
+  const alignShapes = useCallback(
+    (ids: string[], mode: AlignMode) => {
+      const stage = stageRef.current;
+      if (!stage || ids.length === 0) return;
+
+      const patches: { id: string; patch: ShapePatch }[] = [];
+      for (const id of ids) {
+        const shape = shapes.find((s) => s.id === id);
+        // 靠 Konva node 的 id（見 KonvaBoard.tsx，每個渲染的節點都設了 id={shape.id}）查找對應節點，
+        // 用 getClientRect 取得畫布座標系包圍盒，位移量對任何 shape 的 x/y 錨點語意都通用
+        const node = stage.findOne<Konva.Node>(`#${id}`);
+        if (!shape || !node) continue;
+
+        const rect = node.getClientRect({ relativeTo: stage });
+        let deltaX = 0;
+        let deltaY = 0;
+        switch (mode) {
+          case "left":
+            deltaX = -rect.x;
+            break;
+          case "center-h":
+            deltaX = (canvasWidth - rect.width) / 2 - rect.x;
+            break;
+          case "right":
+            deltaX = canvasWidth - (rect.x + rect.width);
+            break;
+          case "top":
+            deltaY = -rect.y;
+            break;
+          case "center-v":
+            deltaY = (canvasHeight - rect.height) / 2 - rect.y;
+            break;
+          case "bottom":
+            deltaY = canvasHeight - (rect.y + rect.height);
+            break;
+        }
+
+        patches.push({
+          id,
+          patch: { x: Math.round(shape.x + deltaX), y: Math.round(shape.y + deltaY) },
+        });
+      }
+      if (patches.length === 0) return;
+      setIsShapePickerOpen(false); // 手動關閉選單（不會經過 setSelectedIds，比照 lockShapes/unlockShapes）
+      updateShapes(patches);
+    },
+    [shapes, canvasWidth, canvasHeight, updateShapes],
   );
 
   // 依圖層清單拖曳結果重新排序
@@ -562,6 +622,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       addBrushStroke,
       updateShape,
       updateShapes,
+      alignShapes,
       reorderShapes,
       deleteShape,
       deleteShapes,
@@ -612,6 +673,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       addBrushStroke,
       updateShape,
       updateShapes,
+      alignShapes,
       reorderShapes,
       deleteShape,
       deleteShapes,

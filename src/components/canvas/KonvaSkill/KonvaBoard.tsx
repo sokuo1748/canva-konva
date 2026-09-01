@@ -16,6 +16,13 @@ const MAX_SCALE = 4;
 // 讓畫布完整落在容器內時四周留一點邊
 const FIT_PADDING_RATIO = 0.9;
 
+// 圓形/三角形的固定 draw 半徑：Konva.Circle/RegularPolygon 的 width/height getter 都綁死同一顆半徑，
+// 沒辦法直接拿 shape.width/height 兩個獨立值去畫。改成半徑永遠固定這個常數，
+// 實際 width/height 全靠 scaleX/scaleY 這層變形矩陣表現（Konva 在畫完 path 之後才套用 scale，
+// 所以 scaleX !== scaleY 時圓形會被拉成橢圓、正三角形會被拉成不等邊三角形，見 CLAUDE.md）。
+// 數值跟 CanvasContext 的 SHAPE_DEFAULT_SIZE 一致，新增時 scaleX/scaleY 剛好都是 1。
+const SHAPE_BASE_RADIUS = 50;
+
 interface LayerRun {
   shapes: CanvasShape[];
   isBrush: boolean;
@@ -173,6 +180,7 @@ export function KonvaBoard() {
                 return (
                   <Line
                     key={shape.id}
+                    id={shape.id}
                     ref={registerShapeRef(shape.id)}
                     name="freehand" // 跟一般直線區分控點樣式
                     x={shape.x}
@@ -194,6 +202,7 @@ export function KonvaBoard() {
                 return (
                   <Text
                     key={shape.id}
+                    id={shape.id}
                     ref={registerShapeRef(shape.id)}
                     x={shape.x}
                     y={shape.y}
@@ -225,11 +234,14 @@ export function KonvaBoard() {
                 return (
                   <Circle
                     key={shape.id}
+                    id={shape.id}
                     ref={registerShapeRef(shape.id)}
                     x={shape.x}
                     y={shape.y}
                     rotation={shape.rotation}
-                    radius={shape.size / 2}
+                    radius={SHAPE_BASE_RADIUS}
+                    scaleX={shape.width / (SHAPE_BASE_RADIUS * 2)}
+                    scaleY={shape.height / (SHAPE_BASE_RADIUS * 2)}
                     fill={shape.fill}
                     {...commonHandlers}
                   />
@@ -240,12 +252,15 @@ export function KonvaBoard() {
                 return (
                   <RegularPolygon
                     key={shape.id}
+                    id={shape.id}
                     ref={registerShapeRef(shape.id)}
                     x={shape.x}
                     y={shape.y}
                     rotation={shape.rotation}
                     sides={3}
-                    radius={shape.size / 2}
+                    radius={SHAPE_BASE_RADIUS}
+                    scaleX={shape.width / (SHAPE_BASE_RADIUS * 2)}
+                    scaleY={shape.height / (SHAPE_BASE_RADIUS * 2)}
                     fill={shape.fill}
                     {...commonHandlers}
                   />
@@ -256,6 +271,7 @@ export function KonvaBoard() {
                 return (
                   <Star
                     key={shape.id}
+                    id={shape.id}
                     ref={registerShapeRef(shape.id)}
                     x={shape.x}
                     y={shape.y}
@@ -273,6 +289,7 @@ export function KonvaBoard() {
                 return (
                   <Line
                     key={shape.id}
+                    id={shape.id}
                     ref={registerShapeRef(shape.id)}
                     x={shape.x}
                     y={shape.y}
@@ -290,6 +307,7 @@ export function KonvaBoard() {
               return (
                 <Rect
                   key={shape.id}
+                  id={shape.id}
                   ref={registerShapeRef(shape.id)}
                   x={shape.x}
                   y={shape.y}
