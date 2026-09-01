@@ -22,6 +22,20 @@
   // flex-shrink: 0 讓這個 pill 永遠維持自然高度，多出來的內容交給 panelRight
   // 既有的 overflow-y: auto 捲動處理，不會再被擠壓/跑版/消失。
   flex-shrink: 0;
+
+  // 固定在 panelRight 捲動容器頂端：pill 跟 ShapePropertiesForm 都是 panelRight
+  // （.panelRight，overflow-y: auto）的直接子元素，中間沒有其他 overflow:hidden
+  // 的祖先層，position: sticky 可以直接生效，不需要另外拆出一層內層捲動容器。
+  // z-index 確保往上捲動的表單內容被壓在 pill 下面（sticky 元素預設仍照 DOM
+  // 順序疊放，不會自動蓋過後面的內容）。
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  // 沒有另外加 border-bottom 當分隔線：上面第 7 行的 border shorthand 本來就
+  // 是四邊完整的 2px 實色框，寬度又跟下方 ShapePropertiesForm 同寬、背景不透明，
+  // 視覺上 pill 下緣那條邊框本身就完整扮演了分隔線的角色。之後如果為了別的
+  // 視覺需求把這個 border 改成只設左右（例如「膠囊只留側邊描邊」），要記得
+  // 這條分隔線也會跟著消失，需要另外補一條 border-bottom。
 }
 
 .label,

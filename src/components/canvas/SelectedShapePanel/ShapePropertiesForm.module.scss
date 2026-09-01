@@ -14,3 +14,16 @@
   display: flex;
   gap: 4px;
 }
+
+// x/y、width/height 這類成對欄位左右並排各半寬，見上方架構重點。
+// NumberField 內部用 width: 100%（相對自己的容器），這裡只要讓兩個子項各自
+// flex: 1 並 min-width: 0（避免 InputUI 的固定 width/height 撐開容器造成溢出）即可。
+.fieldRow {
+  display: flex;
+  gap: 8px;
+
+  > * {
+    flex: 1;
+    min-width: 0;
+  }
+}

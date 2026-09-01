@@ -8,6 +8,8 @@ import {
   MIN_FONT_SIZE,
   MAX_BRUSH_SIZE,
   MAX_ERASER_SIZE,
+  MIN_OPACITY,
+  MAX_OPACITY,
 } from "../../../constants/shapeConstraints";
 import { NumberField } from "../../ui/NumberField/NumberField";
 import { ColorField } from "../../ui/ColorField/ColorField";
@@ -24,14 +26,28 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
   const { updateShape } = useCanvas();
   const commit = (patch: ShapePatch) => updateShape(shape.id, patch);
 
+  // 所有 shape 類型都有 opacity（橡皮擦筆畫例外，見下方 brush 分支），欄位本身跟型別無關，共用同一份 JSX
+  const opacityField = (
+    <NumberField
+      label="opacity"
+      value={shape.opacity}
+      min={MIN_OPACITY}
+      max={MAX_OPACITY}
+      round
+      onCommit={(v) => commit({ opacity: v })}
+    />
+  );
+
   return (
     <div className={styles.form}>
-      <NumberField label="x" value={shape.x} round onCommit={(v) => commit({ x: v })} />
-      <NumberField label="y" value={shape.y} round onCommit={(v) => commit({ y: v })} />
+      <div className={styles.fieldRow}>
+        <NumberField label="x" value={shape.x} round onCommit={(v) => commit({ x: v })} />
+        <NumberField label="y" value={shape.y} round onCommit={(v) => commit({ y: v })} />
+      </div>
       <NumberField label="rotation" value={shape.rotation} round onCommit={(v) => commit({ rotation: v })} />
 
       {(shape.type === "rect" || shape.type === "image") && (
-        <>
+        <div className={styles.fieldRow}>
           <NumberField
             label="width"
             value={shape.width}
@@ -46,12 +62,14 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
             round
             onCommit={(v) => commit({ height: v })}
           />
-        </>
+        </div>
       )}
+
+      {shape.type === "image" && opacityField}
 
       {/* circle/triangle/star 只存一個 size，width/height 兩欄位背後讀寫同一個值 */}
       {(shape.type === "circle" || shape.type === "triangle" || shape.type === "star") && (
-        <>
+        <div className={styles.fieldRow}>
           <NumberField
             label="width"
             value={shape.size}
@@ -66,7 +84,7 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
             round
             onCommit={(v) => commit({ size: v })}
           />
-        </>
+        </div>
       )}
 
       {shape.type === "text" && (
@@ -82,6 +100,8 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
       {shape.type !== "image" && shape.type !== "line" && shape.type !== "brush" && (
         <ColorField label="fill" value={shape.fill} onCommit={(v) => commit({ fill: v })} />
       )}
+
+      {shape.type === "text" && opacityField}
 
       {/* Rect/Circle/Triangle/Star 的邊框設定：strokeEnabled 是明確的顯示開關，
           不再用 strokeWidth: 0 表示不顯示（見 CLAUDE.md 這輪的變更說明） */}
@@ -109,6 +129,7 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
             muted={!shape.strokeEnabled}
             onCommit={(v) => commit({ strokeWidth: v })}
           />
+          {opacityField}
         </>
       )}
 
@@ -122,10 +143,11 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
             round
             onCommit={(v) => commit({ strokeWidth: v })}
           />
+          {opacityField}
         </>
       )}
 
-      {/* 畫筆筆畫沒有 fill，橡皮擦沒有顏色 */}
+      {/* 畫筆筆畫沒有 fill，橡皮擦沒有顏色；橡皮擦也不開放調整透明度（見 CLAUDE.md 這輪的變更說明） */}
       {shape.type === "brush" && (
         <>
           {shape.tool === "brush" && (
@@ -139,6 +161,7 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
             round
             onCommit={(v) => commit({ strokeWidth: v })}
           />
+          {shape.tool === "brush" && opacityField}
         </>
       )}
 

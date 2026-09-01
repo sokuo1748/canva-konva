@@ -9,6 +9,7 @@ export interface RectShape {
   fill: string;
   cornerRadius: number;
   rotation: number;
+  opacity: number; // 0~100 整數百分比，渲染到 Konva 時除以 100
   groupId?: string; // 有值代表被鎖定進某個圖層群組
   stroke: string; // 邊框顏色
   strokeWidth: number; // 邊框粗度
@@ -25,6 +26,7 @@ export interface TextShape {
   fontSize: number;
   fill: string;
   rotation: number;
+  opacity: number;
   groupId?: string;
   bold?: boolean;
   underline?: boolean;
@@ -41,6 +43,7 @@ export interface ImageShape {
   height: number;
   src: string;
   rotation: number;
+  opacity: number;
   groupId?: string;
 }
 
@@ -53,6 +56,7 @@ export interface CircleShape {
   size: number;
   fill: string;
   rotation: number;
+  opacity: number;
   groupId?: string;
   stroke: string; // 邊框顏色
   strokeWidth: number; // 邊框粗度
@@ -68,6 +72,7 @@ export interface TriangleShape {
   size: number;
   fill: string;
   rotation: number;
+  opacity: number;
   groupId?: string;
   stroke: string; // 邊框顏色
   strokeWidth: number; // 邊框粗度
@@ -83,6 +88,7 @@ export interface StarShape {
   size: number;
   fill: string;
   rotation: number;
+  opacity: number;
   groupId?: string;
   stroke: string; // 邊框顏色
   strokeWidth: number; // 邊框粗度
@@ -100,6 +106,7 @@ export interface LineShape {
   strokeWidth: number;
   dash?: number[];
   rotation: number;
+  opacity: number;
   groupId?: string;
 }
 
@@ -118,6 +125,7 @@ export interface BrushShape {
   cap: BrushCap;
   tool: BrushToolKind;
   rotation: number;
+  opacity: number; // 橡皮擦目前固定 100，只有畫筆筆畫在 PaintPanel 可調（見 CanvasContext）
   groupId?: string;
 }
 
@@ -143,6 +151,7 @@ export type ShapePatch = Partial<{
   src: string;
   cornerRadius: number;
   rotation: number;
+  opacity: number;
   groupId: string;
   size: number;
   points: number[];

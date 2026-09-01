@@ -24,8 +24,17 @@ interface UseFreehandDrawResult {
 
 // 畫筆/橡皮擦的自由路徑繪製：mousedown 開筆、mousemove 取樣累積、mouseup 提交一筆完整軌跡
 export function useFreehandDraw(): UseFreehandDrawResult {
-  const { activeTool, brushColor, brushSize, brushCap, eraserSize, addBrushStroke, canvasWidth, canvasHeight } =
-    useCanvas();
+  const {
+    activeTool,
+    brushColor,
+    brushSize,
+    brushCap,
+    eraserSize,
+    brushOpacity,
+    addBrushStroke,
+    canvasWidth,
+    canvasHeight,
+  } = useCanvas();
   const [previewStroke, setPreviewStroke] = useState<PreviewStroke | null>(null);
   // 用 ref 存最新值，避免 mousemove closure 讀到 stale 的 previewStroke
   const strokeRef = useRef<PreviewStroke | null>(null);
@@ -66,8 +75,9 @@ export function useFreehandDraw(): UseFreehandDrawResult {
       stroke: isEraser ? ERASER_STROKE_COLOR : brushColor,
       strokeWidth: isEraser ? eraserSize : brushSize,
       cap: isEraser ? ("round" as BrushCap) : brushCap, // 橡皮擦固定圓形
+      opacity: isEraser ? 100 : brushOpacity, // 橡皮擦不開放調整透明度
     });
-  }, [activeTool, brushColor, brushSize, brushCap, eraserSize, addBrushStroke]);
+  }, [activeTool, brushColor, brushSize, brushCap, eraserSize, brushOpacity, addBrushStroke]);
 
   const handleDrawMouseMove = useCallback(
     (e: KonvaEventObject<MouseEvent>) => {
