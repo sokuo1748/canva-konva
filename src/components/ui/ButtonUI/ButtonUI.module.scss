@@ -38,6 +38,23 @@
   }
 }
 
+// opt-in 疊加樣式：代表「目前正處於某種模式中，需要使用者留意」，跟 selectedStyle
+// 的 origin/template 完整樣式疊加（不取代），用提醒色蓋掉邊框/背景。
+.active {
+  border-color: $color-alert;
+  background-color: $color-alert;
+  color: $color-button-primary-text;
+
+  &:hover:not(:disabled) {
+    background-color: $color-alert;
+  }
+
+  // .icon 本身有明確的 color 覆蓋，active 時要一併蓋掉，避免白色文字配深色圖示的不一致。
+  .icon {
+    color: $color-button-primary-text;
+  }
+}
+
 .icon {
   display: inline-flex;
   align-items: left;
