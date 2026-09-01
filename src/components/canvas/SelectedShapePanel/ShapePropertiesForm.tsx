@@ -1,6 +1,6 @@
 "use client";
 
-import { IconBold, IconStrikethrough, IconUnderline } from "@tabler/icons-react";
+import { IconBold, IconStrikethrough, IconUnderline, IconRotate } from "@tabler/icons-react";
 import { useCanvas } from "../../../context/CanvasContext";
 import type { CanvasShape, ShapePatch } from "../../../types/shape";
 import {
@@ -28,7 +28,13 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
     <div className={styles.form}>
       <NumberField label="x" value={shape.x} round onCommit={(v) => commit({ x: v })} />
       <NumberField label="y" value={shape.y} round onCommit={(v) => commit({ y: v })} />
-      <NumberField label="rotation" value={shape.rotation} round onCommit={(v) => commit({ rotation: v })} />
+      <NumberField
+        label="rotation"
+        icon={<IconRotate size={16} />}
+        value={shape.rotation}
+        round
+        onCommit={(v) => commit({ rotation: v })}
+      />
 
       {(shape.type === "rect" || shape.type === "image") && (
         <>
