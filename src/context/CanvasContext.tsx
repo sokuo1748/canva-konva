@@ -504,23 +504,32 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [copyShapes, deleteShapes],
   );
 
-  // 貼上 clipboard 內容：新 id、位移 PASTE_OFFSET、清掉 groupId（避免誤併入原本的鎖定分組），只推一筆 history
-  // 貼上後把 clipboard 內容本身換成剛貼上的結果（新 id + 新位置），讓連續按 Ctrl+V 每次都再疊加
+  // 貼上 clipboard 內容：新 id、位移 PASTE_OFFSET；原本有 groupId 的成員會重新產生一個新 groupId
+  // （同一批貼上的鎖定分組彼此還是同一組，但跟畫布上原本的分組脫鉤，不會誤併入原組），只推一筆 history。
+  // 貼上後把 clipboard 內容本身換成剛貼上的結果（新 id + 新位置 + 新 groupId），讓連續按 Ctrl+V 每次都再疊加
   // PASTE_OFFSET、呈階梯狀散開，而不是每次都疊在同一個位置；copyShapes/cutShapes 會整包覆蓋
   // clipboardRef，因此重新複製一律回到「未疊加位移」的狀態，不會延續上一次貼上殘留的偏移
   const pasteShapes = useCallback(() => {
     if (clipboardRef.current.length === 0) return;
     pushHistoryEntry();
     const newIds: string[] = [];
+    const groupIdMap = new Map<string, string>(); // 原 groupId -> 這批貼上專用的新 groupId
     const pasted = clipboardRef.current.map((shape) => {
       const id = nextId(TYPE_TO_ID_PREFIX[shape.type]);
       newIds.push(id);
+      let groupId: string | undefined;
+      if (shape.groupId) {
+        if (!groupIdMap.has(shape.groupId)) {
+          groupIdMap.set(shape.groupId, nextId("group"));
+        }
+        groupId = groupIdMap.get(shape.groupId);
+      }
       return {
         ...shape,
         id,
         x: shape.x + PASTE_OFFSET,
         y: shape.y + PASTE_OFFSET,
-        groupId: undefined,
+        groupId,
       } as CanvasShape;
     });
     setShapes((prev) => [...prev, ...pasted]);
