@@ -83,6 +83,24 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
         <ColorField label="fill" value={shape.fill} onCommit={(v) => commit({ fill: v })} />
       )}
 
+      {/* Rect/Circle/Triangle/Star 的邊框設定，strokeWidth 下限 0（等同不顯示邊框） */}
+      {(shape.type === "rect" || shape.type === "circle" || shape.type === "triangle" || shape.type === "star") && (
+        <>
+          <ColorField
+            label="stroke"
+            value={shape.stroke ?? "#000000"}
+            onCommit={(v) => commit({ stroke: v })}
+          />
+          <NumberField
+            label="strokeWidth"
+            value={shape.strokeWidth ?? 0}
+            min={0}
+            round
+            onCommit={(v) => commit({ strokeWidth: v })}
+          />
+        </>
+      )}
+
       {shape.type === "line" && (
         <>
           <ColorField label="stroke" value={shape.stroke} onCommit={(v) => commit({ stroke: v })} />

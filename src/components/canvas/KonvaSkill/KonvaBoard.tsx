@@ -230,6 +230,9 @@ export function KonvaBoard() {
                     rotation={shape.rotation}
                     radius={shape.size / 2}
                     fill={shape.fill}
+                    stroke={shape.stroke}
+                    strokeWidth={shape.strokeWidth}
+                    strokeScaleEnabled={false} // 避免縮放時邊框粗細跟著視覺拉伸
                     {...commonHandlers}
                   />
                 );
@@ -246,6 +249,9 @@ export function KonvaBoard() {
                     sides={3}
                     radius={shape.size / 2}
                     fill={shape.fill}
+                    stroke={shape.stroke}
+                    strokeWidth={shape.strokeWidth}
+                    strokeScaleEnabled={false}
                     {...commonHandlers}
                   />
                 );
@@ -263,6 +269,9 @@ export function KonvaBoard() {
                     innerRadius={shape.size / 4}
                     outerRadius={shape.size / 2}
                     fill={shape.fill}
+                    stroke={shape.stroke}
+                    strokeWidth={shape.strokeWidth}
+                    strokeScaleEnabled={false}
                     {...commonHandlers}
                   />
                 );
@@ -297,6 +306,9 @@ export function KonvaBoard() {
                   height={shape.height}
                   fill={shape.fill}
                   cornerRadius={shape.cornerRadius}
+                  stroke={shape.stroke}
+                  strokeWidth={shape.strokeWidth}
+                  strokeScaleEnabled={false} // 避免縮放時邊框粗細跟著視覺拉伸
                   {...commonHandlers}
                 />
               );

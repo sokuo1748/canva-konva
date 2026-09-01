@@ -22,6 +22,9 @@ const MAX_IMAGE_DIMENSION = 400;
 // 圓形/三角形/星形/線的預設插入尺寸
 const SHAPE_DEFAULT_SIZE = 100;
 const LINE_DEFAULT_STROKE_WIDTH = 4;
+// Rect/Circle/Triangle/Star 的邊框預設值，粗度預設 0 代表預設不顯示邊框，維持既有視覺不變
+const SHAPE_DEFAULT_STROKE = "#000000";
+const SHAPE_DEFAULT_STROKE_WIDTH = 0;
 // 虛線的預設 dash pattern
 const LINE_DASH_PATTERN = [12, 8];
 // 畫筆/橡皮擦工具參數預設值
@@ -191,6 +194,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         fill: "#000000",
         cornerRadius: SQUARE_DEFAULT_CORNER_RADIUS,
         rotation: DEFAULT_ROTATION,
+        stroke: SHAPE_DEFAULT_STROKE,
+        strokeWidth: SHAPE_DEFAULT_STROKE_WIDTH,
       },
     ]);
     setSelectedIds([id]);
@@ -265,6 +270,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         size: SHAPE_DEFAULT_SIZE,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
+        stroke: SHAPE_DEFAULT_STROKE,
+        strokeWidth: SHAPE_DEFAULT_STROKE_WIDTH,
       },
     ]);
     setSelectedIds([id]);
@@ -285,6 +292,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         size: SHAPE_DEFAULT_SIZE,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
+        stroke: SHAPE_DEFAULT_STROKE,
+        strokeWidth: SHAPE_DEFAULT_STROKE_WIDTH,
       },
     ]);
     setSelectedIds([id]);
@@ -305,6 +314,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         size: SHAPE_DEFAULT_SIZE,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
+        stroke: SHAPE_DEFAULT_STROKE,
+        strokeWidth: SHAPE_DEFAULT_STROKE_WIDTH,
       },
     ]);
     setSelectedIds([id]);
