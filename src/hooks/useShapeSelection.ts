@@ -95,14 +95,24 @@ export function useShapeSelection(): UseShapeSelectionResult {
   const rotateAnchorStyleFunc = useCallback((anchor: Konva.Rect) => {
     if (!anchor.hasName("rotater")) return;
 
-    // 比預設 anchorSize 大一點的正方形，圖示才看得清楚；不動 fill/stroke，維持預設白底藍框當底
+    // 比預設 anchorSize 大一點的正方形，圖示才看得清楚
     anchor.width(ROTATE_ANCHOR_ICON_SIZE);
     anchor.height(ROTATE_ANCHOR_ICON_SIZE);
     anchor.offsetX(ROTATE_ANCHOR_ICON_SIZE / 2);
     anchor.offsetY(ROTATE_ANCHOR_ICON_SIZE / 2);
 
+    // 明確蓋掉 Transformer.update() 前面統一套上的白底藍框方塊樣式，
+    // 這個 anchor 只顯示 IconRotate 圖示本身，不要任何方形背景/邊框
+    anchor.stroke("");
+    anchor.strokeWidth(0);
+    anchor.fill("transparent");
+
+    // 圖片還沒載入完成前（rotateAnchorImageRef.current 為 null）沒有 pattern 可畫，
+    // 加上前面已經把 fill 設成 transparent，這個控點會短暫完全不可見（無背景也無圖示）。
+    // 這是刻意接受的 trade-off：圖示是 inline SVG data URI（沒有網路請求），
+    // 載入幾乎是瞬間完成，這個過渡態影響極小，不特別加 loading placeholder。
     const image = rotateAnchorImageRef.current;
-    if (!image) return; // 圖片還沒載入完成前，維持 Konva 預設的白色方塊即可
+    if (!image) return;
 
     anchor.fillPriority("pattern");
     anchor.fillPatternImage(image);
