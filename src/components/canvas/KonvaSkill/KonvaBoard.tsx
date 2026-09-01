@@ -62,6 +62,7 @@ export function KonvaBoard() {
     handleDragMove,
     handleDragEnd,
     handleTransformEnd,
+    rotateAnchorStyleFunc,
   } = useShapeSelection();
   const {
     previewStroke,
@@ -321,7 +322,7 @@ export function KonvaBoard() {
             />
           )}
           {!lastRunIsBrush && previewLine}
-          <Transformer ref={transformerRef} rotateEnabled />
+          <Transformer ref={transformerRef} rotateEnabled anchorStyleFunc={rotateAnchorStyleFunc} />
         </Layer>
       </Stage>
     </div>

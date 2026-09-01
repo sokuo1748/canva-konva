@@ -24,6 +24,14 @@ const MIN_LINE_LENGTH = MIN_SHAPE_SIZE;
 // 這幾種 shape 的 width/height 都綁死同一顆半徑，單選時必須鎖 keepRatio
 const UNIFORM_SCALE_CLASS_NAMES = new Set(["Text", "Circle", "RegularPolygon", "Star"]);
 
+// 旋轉控點圖示：沿用 @tabler/icons-react 的 IconRotate path data（outline 風格）
+// 顏色寫死成 Konva 預設 anchor 邊框色（rgb(0, 161, 255)），跟其餘控點視覺一致；
+// 不能用 currentColor，這裡是要轉成點陣圖的獨立 SVG，不在 CSS context 裡
+const ROTATE_ANCHOR_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgb(0, 161, 255)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.95 11a8 8 0 1 0 -.5 4m.5 5v-5h-5" /></svg>`;
+const ROTATE_ANCHOR_ICON_DATA_URI = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(ROTATE_ANCHOR_ICON_SVG)}`;
+// 旋轉控點的圖示尺寸（px），比預設 anchorSize（10）大一些，圖示線條才不會擠在一起
+const ROTATE_ANCHOR_ICON_SIZE = 20;
+
 // 依選取節點設定 Transformer 的控點與 keepRatio
 function applyTransformerTarget(transformer: Konva.Transformer, nodes: Konva.Node[]) {
   transformer.nodes(nodes);
@@ -52,6 +60,7 @@ interface UseShapeSelectionResult {
   handleDragMove: (id: string) => (e: KonvaEventObject<DragEvent>) => void;
   handleDragEnd: (id: string) => (e: KonvaEventObject<DragEvent>) => void;
   handleTransformEnd: (id: string) => (e: KonvaEventObject<Event>) => void; // 縮放/旋轉結束後寫回屬性
+  rotateAnchorStyleFunc: (anchor: Konva.Rect) => void; // 把旋轉控點的空白方塊換成 IconRotate 圖示
 }
 
 // 選取/拖曳/縮放/框選邏輯，selectedIds 讀寫 CanvasContext
@@ -69,6 +78,48 @@ export function useShapeSelection(): UseShapeSelectionResult {
   useEffect(() => {
     selectedIdsRef.current = selectedIds;
   }, [selectedIds]);
+
+  // 旋轉控點圖示：載入完成前維持 Konva 預設空白方塊，載入完成後補一次 forceUpdate 讓已顯示的控點立即補上圖示
+  const rotateAnchorImageRef = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    const image = new window.Image();
+    image.onload = () => {
+      rotateAnchorImageRef.current = image;
+      transformerRef.current?.forceUpdate();
+    };
+    image.src = ROTATE_ANCHOR_ICON_DATA_URI;
+  }, []);
+
+  // Transformer.update() 最後一步會對每個 anchor（含 rotater）呼叫這個 func，
+  // 在這裡覆寫 rotater 的視覺內容不會被前面的統一設定蓋掉
+  const rotateAnchorStyleFunc = useCallback((anchor: Konva.Rect) => {
+    if (!anchor.hasName("rotater")) return;
+
+    // 比預設 anchorSize 大一點的正方形，圖示才看得清楚
+    anchor.width(ROTATE_ANCHOR_ICON_SIZE);
+    anchor.height(ROTATE_ANCHOR_ICON_SIZE);
+    anchor.offsetX(ROTATE_ANCHOR_ICON_SIZE / 2);
+    anchor.offsetY(ROTATE_ANCHOR_ICON_SIZE / 2);
+
+    // 明確蓋掉 Transformer.update() 前面統一套上的白底藍框方塊樣式，
+    // 這個 anchor 只顯示 IconRotate 圖示本身，不要任何方形背景/邊框
+    anchor.stroke("");
+    anchor.strokeWidth(0);
+    anchor.fill("transparent");
+
+    // 圖片還沒載入完成前（rotateAnchorImageRef.current 為 null）沒有 pattern 可畫，
+    // 加上前面已經把 fill 設成 transparent，這個控點會短暫完全不可見（無背景也無圖示）。
+    // 這是刻意接受的 trade-off：圖示是 inline SVG data URI（沒有網路請求），
+    // 載入幾乎是瞬間完成，這個過渡態影響極小，不特別加 loading placeholder。
+    const image = rotateAnchorImageRef.current;
+    if (!image) return;
+
+    anchor.fillPriority("pattern");
+    anchor.fillPatternImage(image);
+    anchor.fillPatternRepeat("no-repeat");
+    anchor.fillPatternScaleX(ROTATE_ANCHOR_ICON_SIZE / image.width);
+    anchor.fillPatternScaleY(ROTATE_ANCHOR_ICON_SIZE / image.height);
+  }, []);
 
   // 註冊 shape 對應的 Konva node
   const registerShapeRef = useCallback((id: string) => {
@@ -364,5 +415,6 @@ export function useShapeSelection(): UseShapeSelectionResult {
     handleDragMove,
     handleDragEnd,
     handleTransformEnd,
+    rotateAnchorStyleFunc,
   };
 }
