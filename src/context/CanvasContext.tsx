@@ -6,6 +6,7 @@ import type Konva from "konva";
 import type { BrushCap, BrushToolKind, CanvasShape, CanvasSnapshot, ShapePatch } from "../types/shape";
 import { toggleSelection } from "../utils/selection";
 import { MIN_CANVAS_SIZE, MAX_CANVAS_SIZE } from "../constants/shapeConstraints";
+import { DEFAULT_FONT_FAMILY } from "../constants/fontFamilies";
 
 // 畫布尺寸初始值
 const DEFAULT_CANVAS_WIDTH = 800;
@@ -210,6 +211,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         y: (canvasHeight - TEXT_DEFAULT_FONT_SIZE) / 2,
         text: TEXT_DEFAULT_CONTENT,
         fontSize: TEXT_DEFAULT_FONT_SIZE,
+        fontFamily: DEFAULT_FONT_FAMILY,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
       },
