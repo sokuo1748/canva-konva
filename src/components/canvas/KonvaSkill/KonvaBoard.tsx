@@ -8,6 +8,7 @@ import { useShapeSelection } from "../../../hooks/useShapeSelection";
 import { useFreehandDraw } from "../../../hooks/useFreehandDraw";
 import type { CanvasShape } from "../../../types/shape";
 import { ERASER_STROKE_COLOR } from "../../../constants/shapeConstraints";
+import { DEFAULT_FONT_FAMILY } from "../../../constants/fontFamilies";
 import { URLImage } from "./URLImage";
 
 // ResizeObserver 的 fit-scale 上下限
@@ -200,6 +201,7 @@ export function KonvaBoard() {
                     rotation={shape.rotation}
                     text={shape.text}
                     fontSize={shape.fontSize}
+                    fontFamily={shape.fontFamily ?? DEFAULT_FONT_FAMILY}
                     fill={shape.fill}
                     fontStyle={shape.bold ? "bold" : "normal"}
                     textDecoration={[shape.underline && "underline", shape.strikethrough && "line-through"]

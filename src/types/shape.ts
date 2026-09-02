@@ -26,6 +26,7 @@ export interface TextShape {
   bold?: boolean;
   underline?: boolean;
   strikethrough?: boolean;
+  fontFamily?: string;
 }
 
 // 圖片（src 存 base64 data URL，才能被 getSnapshot() 序列化保存）
@@ -141,6 +142,7 @@ export type ShapePatch = Partial<{
   bold: boolean;
   underline: boolean;
   strikethrough: boolean;
+  fontFamily: string;
 }>;
 
 // undo/redo 用的畫布快照

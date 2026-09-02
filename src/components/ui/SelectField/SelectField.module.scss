@@ -1,0 +1,31 @@
+@use "../../../styles/global" as *;
+
+// label 在上、input 在下垂直堆疊，跟 NumberField/ColorField 排版一致。
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  font-size: $font-size-base;
+  color: $color-text;
+  opacity: 0.6;
+}
+
+// 沿用 InputUI 的邊框/字級樣式，維持跟其他欄位一致的視覺
+.select {
+  width: 100%;
+  height: 36px;
+  border: 2px solid $color-button-outline-border;
+  border-radius: $radius-base;
+  padding: 0 10px;
+  font-size: $font-size-base;
+  color: $color-text;
+  background-color: #ffffff;
+
+  &:focus {
+    outline: 2px solid $color-button-outline-border;
+    outline-offset: -1px;
+  }
+}
