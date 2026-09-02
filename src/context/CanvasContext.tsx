@@ -3,8 +3,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import type Konva from "konva";
-import type { BrushCap, BrushToolKind, CanvasShape, CanvasSnapshot, ShapePatch } from "../types/shape";
+import type { BrushCap, CanvasShape, CanvasSnapshot, ShapePatch } from "../types/shape";
 import { toggleSelection } from "../utils/selection";
+import { eraseBrushStroke } from "../utils/eraseBrushStroke";
+import type { Point } from "../utils/eraseBrushStroke";
 import { MIN_CANVAS_SIZE, MAX_CANVAS_SIZE } from "../constants/shapeConstraints";
 import { DEFAULT_FONT_FAMILY } from "../constants/fontFamilies";
 
@@ -41,8 +43,7 @@ interface CanvasContextValue {
   addStar: () => void; // 新增星形
   addLine: (dashed: boolean) => void; // 新增直線/虛線
   addBrushStroke: (params: {
-    // 提交一筆完整的畫筆/橡皮擦軌跡
-    tool: BrushToolKind;
+    // 提交一筆完整的畫筆軌跡（橡皮擦不再走這裡，見 eraseBrushStrokes）
     x: number;
     y: number;
     points: number[];
@@ -50,6 +51,7 @@ interface CanvasContextValue {
     strokeWidth: number;
     cap: BrushCap;
   }) => void;
+  eraseBrushStrokes: (pathPoints: Point[], eraserSize: number) => void; // 資料層級擦除既有畫筆筆畫
   updateShape: (id: string, patch: ShapePatch) => void; // 更新單一物件屬性
   updateShapes: (patches: { id: string; patch: ShapePatch }[]) => void; // 批次更新多個物件屬性
   reorderShapes: (orderedIds: string[]) => void; // 依圖層清單拖曳結果重新排序
@@ -338,10 +340,9 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [canvasWidth, canvasHeight, nextId, pushHistoryEntry, setSelectedIds],
   );
 
-  // 提交一筆完整的畫筆/橡皮擦軌跡，不自動選取（避免畫下一筆時被 Transformer 干擾）
+  // 提交一筆完整的畫筆軌跡，不自動選取（避免畫下一筆時被 Transformer 干擾）
   const addBrushStroke = useCallback(
     (params: {
-      tool: BrushToolKind;
       x: number;
       y: number;
       points: number[];
@@ -362,12 +363,53 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
           stroke: params.stroke,
           strokeWidth: params.strokeWidth,
           cap: params.cap,
-          tool: params.tool,
           rotation: DEFAULT_ROTATION,
         },
       ]);
     },
     [nextId, pushHistoryEntry],
+  );
+
+  // 橡皮擦：資料層級擦除，不產生任何持久化 shape，而是直接切割/裁切被擦到的既有畫筆筆畫
+  const eraseBrushStrokes = useCallback(
+    (pathPoints: Point[], eraserSize: number) => {
+      if (pathPoints.length === 0) return;
+
+      let anyChanged = false;
+      const nextShapes: CanvasShape[] = [];
+      for (const shape of shapes) {
+        if (shape.type !== "brush") {
+          nextShapes.push(shape);
+          continue;
+        }
+        const result = eraseBrushStroke(shape, pathPoints, eraserSize);
+        if (!result.changed) {
+          nextShapes.push(shape); // 沒被擦到，維持同一個物件參考
+          continue;
+        }
+        anyChanged = true;
+        // 刻意不帶原本的 groupId：切段後的新畫筆片段變成獨立筆畫，不繼承原本鎖定分組的成員身分
+        // （被擦剩的部分理論上已經不是使用者鎖定當下的那個完整物件了）
+        for (const segment of result.segments) {
+          nextShapes.push({
+            id: nextId("brush"),
+            type: "brush",
+            x: segment.x,
+            y: segment.y,
+            points: segment.points,
+            stroke: segment.stroke,
+            strokeWidth: segment.strokeWidth,
+            cap: segment.cap,
+            rotation: DEFAULT_ROTATION,
+          });
+        }
+      }
+
+      if (!anyChanged) return; // 這筆橡皮擦完全沒碰到任何畫筆筆畫，不推無意義的 history
+      pushHistoryEntry();
+      setShapes(nextShapes);
+    },
+    [shapes, nextId, pushHistoryEntry],
   );
 
   // 更新單一物件屬性
@@ -562,6 +604,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       addStar,
       addLine,
       addBrushStroke,
+      eraseBrushStrokes,
       updateShape,
       updateShapes,
       reorderShapes,
@@ -612,6 +655,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       addStar,
       addLine,
       addBrushStroke,
+      eraseBrushStrokes,
       updateShape,
       updateShapes,
       reorderShapes,

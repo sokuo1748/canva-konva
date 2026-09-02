@@ -3,12 +3,7 @@
 import { IconBold, IconStrikethrough, IconUnderline } from "@tabler/icons-react";
 import { useCanvas } from "../../../context/CanvasContext";
 import type { CanvasShape, ShapePatch } from "../../../types/shape";
-import {
-  MIN_SHAPE_SIZE,
-  MIN_FONT_SIZE,
-  MAX_BRUSH_SIZE,
-  MAX_ERASER_SIZE,
-} from "../../../constants/shapeConstraints";
+import { MIN_SHAPE_SIZE, MIN_FONT_SIZE, MAX_BRUSH_SIZE } from "../../../constants/shapeConstraints";
 import { NumberField } from "../../ui/NumberField/NumberField";
 import { ColorField } from "../../ui/ColorField/ColorField";
 import { TextField } from "../../ui/TextField/TextField";
@@ -107,17 +102,15 @@ export function ShapePropertiesForm({ shape }: ShapePropertiesFormProps) {
         </>
       )}
 
-      {/* 畫筆筆畫沒有 fill，橡皮擦沒有顏色 */}
+      {/* 畫筆筆畫（橡皮擦不再是持久化 shape，見 CanvasContext 的 eraseBrushStrokes） */}
       {shape.type === "brush" && (
         <>
-          {shape.tool === "brush" && (
-            <ColorField label="stroke" value={shape.stroke} onCommit={(v) => commit({ stroke: v })} />
-          )}
+          <ColorField label="stroke" value={shape.stroke} onCommit={(v) => commit({ stroke: v })} />
           <NumberField
             label="strokeWidth"
             value={shape.strokeWidth}
             min={1}
-            max={shape.tool === "eraser" ? MAX_ERASER_SIZE : MAX_BRUSH_SIZE}
+            max={MAX_BRUSH_SIZE}
             round
             onCommit={(v) => commit({ strokeWidth: v })}
           />

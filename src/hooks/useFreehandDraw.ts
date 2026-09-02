@@ -3,8 +3,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { useCanvas } from "../context/CanvasContext";
-import type { BrushCap } from "../types/shape";
-import { ERASER_STROKE_COLOR } from "../constants/shapeConstraints";
 
 // 兩點間距離小於這個值就跳過，避免長筆畫產生過多點
 const MIN_POINT_DISTANCE = 2;
@@ -24,8 +22,17 @@ interface UseFreehandDrawResult {
 
 // 畫筆/橡皮擦的自由路徑繪製：mousedown 開筆、mousemove 取樣累積、mouseup 提交一筆完整軌跡
 export function useFreehandDraw(): UseFreehandDrawResult {
-  const { activeTool, brushColor, brushSize, brushCap, eraserSize, addBrushStroke, canvasWidth, canvasHeight } =
-    useCanvas();
+  const {
+    activeTool,
+    brushColor,
+    brushSize,
+    brushCap,
+    eraserSize,
+    addBrushStroke,
+    eraseBrushStrokes,
+    canvasWidth,
+    canvasHeight,
+  } = useCanvas();
   const [previewStroke, setPreviewStroke] = useState<PreviewStroke | null>(null);
   // 用 ref 存最新值，避免 mousemove closure 讀到 stale 的 previewStroke
   const strokeRef = useRef<PreviewStroke | null>(null);
@@ -57,17 +64,25 @@ export function useFreehandDraw(): UseFreehandDrawResult {
     // 單純點擊只有一個點時補成兩份，才能畫出可見的點（見 CLAUDE.md 已知細節）
     const points = stroke.points.length <= 2 ? [0, 0, 0, 0] : stroke.points;
 
-    const isEraser = activeTool === "eraser";
+    if (activeTool === "eraser") {
+      // 橡皮擦不再產生持久化 shape，而是把這筆路徑（換算成絕對座標）拿去資料層級擦除既有畫筆筆畫
+      const absolutePoints: { x: number; y: number }[] = [];
+      for (let i = 0; i < points.length; i += 2) {
+        absolutePoints.push({ x: stroke.x + points[i], y: stroke.y + points[i + 1] });
+      }
+      eraseBrushStrokes(absolutePoints, eraserSize);
+      return;
+    }
+
     addBrushStroke({
-      tool: isEraser ? "eraser" : "brush",
       x: stroke.x,
       y: stroke.y,
       points,
-      stroke: isEraser ? ERASER_STROKE_COLOR : brushColor,
-      strokeWidth: isEraser ? eraserSize : brushSize,
-      cap: isEraser ? ("round" as BrushCap) : brushCap, // 橡皮擦固定圓形
+      stroke: brushColor,
+      strokeWidth: brushSize,
+      cap: brushCap,
     });
-  }, [activeTool, brushColor, brushSize, brushCap, eraserSize, addBrushStroke]);
+  }, [activeTool, brushColor, brushSize, brushCap, eraserSize, addBrushStroke, eraseBrushStrokes]);
 
   const handleDrawMouseMove = useCallback(
     (e: KonvaEventObject<MouseEvent>) => {

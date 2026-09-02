@@ -184,7 +184,6 @@ export function KonvaBoard() {
                     strokeWidth={shape.strokeWidth}
                     lineCap={shape.cap === "round" ? "round" : "square"}
                     lineJoin={shape.cap === "round" ? "round" : "miter"}
-                    globalCompositeOperation={shape.tool === "eraser" ? "destination-out" : "source-over"}
                     strokeScaleEnabled={false}
                     {...commonHandlers}
                   />

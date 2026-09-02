@@ -11,7 +11,6 @@ import {
 import type { DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { IconEraser } from "@tabler/icons-react";
 import { SHAPE_TYPE_ICONS } from "../../../constants/shapeTypeIcons";
 import { useCanvas } from "../../../context/CanvasContext";
 import { isAdditiveClick } from "../../../utils/selection";
@@ -65,8 +64,7 @@ interface LayerRowProps {
 // 單一圖層列
 function LayerRow({ shape, rootRef, rootStyle, dragAttributes, dragListeners, isDragging }: LayerRowProps) {
   const { selectedIds, selectShapeExact } = useCanvas();
-  // 橡皮擦筆畫換成 IconEraser 方便區分
-  const Icon = shape.type === "brush" && shape.tool === "eraser" ? IconEraser : SHAPE_TYPE_ICONS[shape.type];
+  const Icon = SHAPE_TYPE_ICONS[shape.type];
   const isSelected = selectedIds.includes(shape.id);
 
   return (

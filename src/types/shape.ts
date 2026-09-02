@@ -92,10 +92,11 @@ export interface LineShape {
   groupId?: string;
 }
 
-export type BrushToolKind = "brush" | "eraser";
 export type BrushCap = "round" | "square"; // 筆刷頭部形狀
 
-// 畫筆/橡皮擦自由路徑，tool 為 eraser 時渲染會套用 destination-out 合成擦除
+// 畫筆自由路徑。橡皮擦不再產生持久化的 BrushShape，而是直接切割/裁切既有畫筆筆畫的
+// points（見 src/utils/eraseBrushStroke.ts + CanvasContext 的 eraseBrushStrokes），
+// 所以這裡不需要（也不應該再有）tool 欄位分辨畫筆/橡皮擦。
 export interface BrushShape {
   id: string;
   type: "brush";
@@ -105,7 +106,6 @@ export interface BrushShape {
   stroke: string;
   strokeWidth: number;
   cap: BrushCap;
-  tool: BrushToolKind;
   rotation: number;
   groupId?: string;
 }
