@@ -12,8 +12,10 @@ import {
 import { NumberField } from "../../ui/NumberField/NumberField";
 import { ColorField } from "../../ui/ColorField/ColorField";
 import { TextField } from "../../ui/TextField/TextField";
+import { SelectField } from "../../ui/SelectField/SelectField";
 import { IconButtonUI } from "../../ui/IconButtonUI/IconButtonUI";
 import { AlignButtons } from "./AlignButtons";
+import { FONT_FAMILIES, DEFAULT_FONT_FAMILY } from "../../../constants/fontFamilies";
 import styles from "./ShapePropertiesForm.module.scss";
 
 interface ShapePropertiesFormProps {
@@ -92,6 +94,15 @@ export function ShapePropertiesForm({ shape, alignIds }: ShapePropertiesFormProp
           min={MIN_FONT_SIZE}
           round
           onCommit={(v) => commit({ fontSize: v })}
+        />
+      )}
+
+      {shape.type === "text" && (
+        <SelectField
+          label="fontFamily"
+          value={shape.fontFamily ?? DEFAULT_FONT_FAMILY}
+          options={FONT_FAMILIES}
+          onCommit={(v) => commit({ fontFamily: v })}
         />
       )}
 
