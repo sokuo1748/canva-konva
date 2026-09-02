@@ -6,6 +6,8 @@ import type Konva from "konva";
 import type { BrushCap, BrushToolKind, CanvasShape, CanvasSnapshot, ShapePatch } from "../types/shape";
 import { toggleSelection } from "../utils/selection";
 import { MIN_CANVAS_SIZE, MAX_CANVAS_SIZE } from "../constants/shapeConstraints";
+import type { AlignMode } from "../utils/align";
+import { computeAlignDelta, getShapeLogicalRect, unionRects } from "../utils/align";
 
 // 畫布尺寸初始值
 const DEFAULT_CANVAS_WIDTH = 800;
@@ -30,8 +32,9 @@ const DEFAULT_BRUSH_SIZE = 8;
 const DEFAULT_BRUSH_CAP: BrushCap = "round";
 const DEFAULT_ERASER_SIZE = 20;
 
-// 對齊模式：靠左/水平置中/靠右/靠上/垂直置中/靠下，各自獨立對齊到畫布邊界，不是選取物件互相對齊
-export type AlignMode = "left" | "center-h" | "right" | "top" | "center-v" | "bottom";
+// 對齊模式（完整 3x3 方位）定義在 utils/align.ts（純函式，不依賴 Konva/React），這裡單純
+// re-export 給 Toolbar/panelRight 消費，維持既有「AlignMode 從 CanvasContext 匯出」的呼叫慣例
+export type { AlignMode };
 
 interface CanvasContextValue {
   shapes: CanvasShape[]; // 畫布上所有物件
@@ -405,49 +408,62 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [pushHistoryEntry],
   );
 
-  // 對齊選取物件到畫布邊界/中心，各自獨立對齊（不是選取物件互相對齊），一次操作只推一筆 history
+  // 對齊選取物件到畫布邊界/中心（完整 3x3 方位），一次操作只推一筆 history。
+  // 一般情況每個被選取的 shape 各自獨立對齊；但如果 ids 剛好等於某個鎖定分組的全部成員，
+  // 改成對整組的聯集包圍盒算一次位移量、套用到每個成員，維持彼此的相對排列（跟拖曳分組的
+  // handleDragMove 連動精神一致，不會讓分組成員各自貼齊、彼此重疊）。
   const alignShapes = useCallback(
     (ids: string[], mode: AlignMode) => {
+      if (ids.length === 0) return;
       const stage = stageRef.current;
-      if (!stage || ids.length === 0) return;
+
+      // 取單一 shape 的畫布座標系包圍盒：優先讀 Konva node 的 getClientRect（考慮實際渲染狀態），
+      // 找不到 node（例如圖片還沒載入完成）就 fallback 用 shape 自己的資料算邏輯包圍盒
+      const getRect = (shape: CanvasShape) => {
+        const node = stage?.findOne<Konva.Node>(`#${shape.id}`);
+        if (node) return node.getClientRect({ relativeTo: stage! });
+        return getShapeLogicalRect(shape);
+      };
+
+      // 目前 ids 是否剛好等於某個既有鎖定分組的全部成員（比照 Toolbar 判斷 Lock/Unlock icon 的邏輯）
+      const firstGroupId = shapes.find((s) => s.id === ids[0])?.groupId;
+      const isWholeGroup =
+        ids.length >= 2 &&
+        !!firstGroupId &&
+        ids.every((id) => shapes.find((s) => s.id === id)?.groupId === firstGroupId) &&
+        shapes.filter((s) => s.groupId === firstGroupId).length === ids.length;
 
       const patches: { id: string; patch: ShapePatch }[] = [];
-      for (const id of ids) {
-        const shape = shapes.find((s) => s.id === id);
-        // 靠 Konva node 的 id（見 KonvaBoard.tsx，每個渲染的節點都設了 id={shape.id}）查找對應節點，
-        // 用 getClientRect 取得畫布座標系包圍盒，位移量對任何 shape 的 x/y 錨點語意都通用
-        const node = stage.findOne<Konva.Node>(`#${id}`);
-        if (!shape || !node) continue;
 
-        const rect = node.getClientRect({ relativeTo: stage });
-        let deltaX = 0;
-        let deltaY = 0;
-        switch (mode) {
-          case "left":
-            deltaX = -rect.x;
-            break;
-          case "center-h":
-            deltaX = (canvasWidth - rect.width) / 2 - rect.x;
-            break;
-          case "right":
-            deltaX = canvasWidth - (rect.x + rect.width);
-            break;
-          case "top":
-            deltaY = -rect.y;
-            break;
-          case "center-v":
-            deltaY = (canvasHeight - rect.height) / 2 - rect.y;
-            break;
-          case "bottom":
-            deltaY = canvasHeight - (rect.y + rect.height);
-            break;
+      if (isWholeGroup) {
+        const members = ids
+          .map((id) => shapes.find((s) => s.id === id))
+          .filter((s): s is CanvasShape => !!s);
+        const rects = members.map(getRect).filter((r): r is NonNullable<typeof r> => !!r);
+        const unionBox = unionRects(rects);
+        if (unionBox) {
+          const { deltaX, deltaY } = computeAlignDelta(unionBox, mode, canvasWidth, canvasHeight);
+          for (const shape of members) {
+            patches.push({
+              id: shape.id,
+              patch: { x: Math.round(shape.x + deltaX), y: Math.round(shape.y + deltaY) },
+            });
+          }
         }
-
-        patches.push({
-          id,
-          patch: { x: Math.round(shape.x + deltaX), y: Math.round(shape.y + deltaY) },
-        });
+      } else {
+        for (const id of ids) {
+          const shape = shapes.find((s) => s.id === id);
+          if (!shape) continue;
+          const rect = getRect(shape);
+          if (!rect) continue;
+          const { deltaX, deltaY } = computeAlignDelta(rect, mode, canvasWidth, canvasHeight);
+          patches.push({
+            id,
+            patch: { x: Math.round(shape.x + deltaX), y: Math.round(shape.y + deltaY) },
+          });
+        }
       }
+
       if (patches.length === 0) return;
       setIsShapePickerOpen(false); // 手動關閉選單（不會經過 setSelectedIds，比照 lockShapes/unlockShapes）
       updateShapes(patches);

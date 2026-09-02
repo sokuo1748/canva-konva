@@ -1,38 +1,20 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { ReactNode } from "react";
 import {
   IconArrowBackUp,
   IconArrowForwardUp,
   IconFileExport,
-  IconLayoutAlignBottom,
-  IconLayoutAlignCenter,
-  IconLayoutAlignLeft,
-  IconLayoutAlignMiddle,
-  IconLayoutAlignRight,
-  IconLayoutAlignTop,
   IconLock,
   IconLockOpen,
   IconRefresh,
 } from "@tabler/icons-react";
-import type { AlignMode } from "../../../context/CanvasContext";
 import { ButtonUI } from "../../ui/ButtonUI/ButtonUI";
 import { IconButtonUI } from "../../ui/IconButtonUI/IconButtonUI";
 import { useCanvas } from "../../../context/CanvasContext";
 import { ExportModal } from "../ExportModal/ExportModal";
 import { CanvasSizeInput } from "./CanvasSizeInput";
 import styles from "./Toolbar.module.scss";
-
-// 對齊按鈕的顯示資料：icon + label + 對應的 AlignMode
-const ALIGN_BUTTONS: { mode: AlignMode; icon: ReactNode; label: string }[] = [
-  { mode: "left", icon: <IconLayoutAlignLeft size={20} />, label: "靠左對齊" },
-  { mode: "center-h", icon: <IconLayoutAlignCenter size={20} />, label: "水平置中" },
-  { mode: "right", icon: <IconLayoutAlignRight size={20} />, label: "靠右對齊" },
-  { mode: "top", icon: <IconLayoutAlignTop size={20} />, label: "靠上對齊" },
-  { mode: "center-v", icon: <IconLayoutAlignMiddle size={20} />, label: "垂直置中" },
-  { mode: "bottom", icon: <IconLayoutAlignBottom size={20} />, label: "靠下對齊" },
-];
 
 export function Toolbar() {
   const {
@@ -45,7 +27,6 @@ export function Toolbar() {
     shapes,
     lockShapes,
     unlockShapes,
-    alignShapes,
   } = useCanvas();
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const closeExportModal = useCallback(() => setIsExportModalOpen(false), []);
@@ -95,14 +76,6 @@ export function Toolbar() {
               onClick={() => lockShapes(selectedIds)}
             />
           ))}
-        {selectedIds.length >= 1 && (
-          <>
-            <div className={styles.divider} />
-            {ALIGN_BUTTONS.map(({ mode, icon, label }) => (
-              <IconButtonUI key={mode} icon={icon} label={label} onClick={() => alignShapes(selectedIds, mode)} />
-            ))}
-          </>
-        )}
       </div>
       <div className={styles.group}>
         <CanvasSizeInput />
