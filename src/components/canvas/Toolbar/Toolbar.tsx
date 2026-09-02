@@ -11,14 +11,29 @@ import {
 } from "@tabler/icons-react";
 import { ButtonUI } from "../../ui/ButtonUI/ButtonUI";
 import { IconButtonUI } from "../../ui/IconButtonUI/IconButtonUI";
+import { InputUI } from "../../ui/InputUI/InputUI";
 import { useCanvas } from "../../../context/CanvasContext";
 import { ExportModal } from "../ExportModal/ExportModal";
 import { CanvasSizeInput } from "./CanvasSizeInput";
 import styles from "./Toolbar.module.scss";
 
+// 縮小原生 color input 的內距，讓 32x32 的方塊看起來像一個色塊，跟 IconButtonUI 尺寸一致
+const BG_COLOR_SWATCH_STYLE = { padding: 2, cursor: "pointer" } as const;
+
 export function Toolbar() {
-  const { resetCanvas, undo, redo, canUndo, canRedo, selectedIds, shapes, lockShapes, unlockShapes } =
-    useCanvas();
+  const {
+    resetCanvas,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    selectedIds,
+    shapes,
+    lockShapes,
+    unlockShapes,
+    canvasBackgroundColor,
+    setCanvasBackgroundColor,
+  } = useCanvas();
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const closeExportModal = useCallback(() => setIsExportModalOpen(false), []);
 
@@ -70,6 +85,16 @@ export function Toolbar() {
       </div>
       <div className={styles.group}>
         <CanvasSizeInput />
+        <InputUI
+          type="color"
+          value={canvasBackgroundColor}
+          onChange={(e) => setCanvasBackgroundColor(e.target.value)}
+          width={32}
+          height={32}
+          style={BG_COLOR_SWATCH_STYLE}
+          aria-label="Canvas background color"
+          title="Canvas background color"
+        />
         <ButtonUI
           name="Export"
           icon={<IconFileExport size={20} />}

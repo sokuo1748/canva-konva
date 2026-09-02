@@ -41,6 +41,7 @@ export function KonvaBoard() {
     shapes,
     canvasWidth,
     canvasHeight,
+    canvasBackgroundColor,
     containerRef,
     stageRef,
     overlayLayerRef,
@@ -61,6 +62,7 @@ export function KonvaBoard() {
     handleDragStart,
     handleDragMove,
     handleDragEnd,
+    handleDragBound,
     handleTransformEnd,
     rotateAnchorStyleFunc,
   } = useShapeSelection();
@@ -109,6 +111,7 @@ export function KonvaBoard() {
     onDragStart: handleDragStart(id),
     onDragMove: handleDragMove(id),
     onDragEnd: handleDragEnd(id),
+    dragBoundFunc: handleDragBound(id), // 不能整個拖出畫布，見 useShapeSelection.ts
     onTransformEnd: handleTransformEnd(id),
   });
 
@@ -155,17 +158,24 @@ export function KonvaBoard() {
             y={0}
             width={canvasWidth}
             height={canvasHeight}
-            fill="#ffffff"
-            stroke="#d1d5db"
-            strokeWidth={1}
+            fill={canvasBackgroundColor}
+            stroke="#000000"
+            strokeWidth={2}
             listening={false}
           />
         </Layer>
 
-        {/* 依陣列順序把一般 shape/畫筆筆畫的連續區段各自拆成一個 Layer，讓圖層排序能真實反映到畫面 */}
+        {/* 依陣列順序把一般 shape/畫筆筆畫的連續區段各自拆成一個 Layer，讓圖層排序能真實反映到畫面；
+            clip 到畫布範圍，物件拖出畫布外時超出的部分要被裁掉看不見（不是限制拖曳座標本身） */}
         {layerRuns.map((run, index) => (
           // key 用領頭 shape id，不是陣列 index，避免交錯排序時圖片被誤判成新節點而重新載入閃爍
-          <Layer key={run.shapes[0].id}>
+          <Layer
+            key={run.shapes[0].id}
+            clipX={0}
+            clipY={0}
+            clipWidth={canvasWidth}
+            clipHeight={canvasHeight}
+          >
             {run.shapes.map((shape) => {
               const commonHandlers = buildCommonHandlers(shape.id);
 

@@ -20,6 +20,45 @@ const LINE_ANCHORS = ["middle-left", "middle-right"];
 const MARQUEE_DRAG_THRESHOLD = 4;
 // 線段縮放後兩端點距離下限
 const MIN_LINE_LENGTH = MIN_SHAPE_SIZE;
+// 拖曳超出畫布外時，跟畫布至少保留這麼多 px 的重疊範圍，不能整個被拖出去消失
+// （用 dragBoundFunc 限制拖曳範圍，而不是靠 Layer clip 隱藏——clip 連 hit-test 一起裁掉，
+// 整個拖出去會變成看不到也點不到，見 CLAUDE.md／PR 討論）
+const MIN_DRAG_OVERLAP = 20;
+
+// 把候選位置（單一軸）夾在「至少保留 minOverlap px 跟畫布重疊」的範圍內；
+// size/canvasSize 任一邊比 minOverlap 還小時，minOverlap 會被夾到不超過該邊長，
+// 避免整個 shape 或整個畫布比要求的重疊量還小時算出不合法的範圍
+function clampOverlapAxis(pos: number, size: number, canvasSize: number): number {
+  const overlap = Math.min(MIN_DRAG_OVERLAP, size, canvasSize);
+  const lower = overlap - size;
+  const upper = canvasSize - overlap;
+  return Math.min(Math.max(pos, lower), upper);
+}
+
+// 給定 node 目前的 bounding box，把想要移動到的目標 local 座標（跟 node.x()/y() 同座標系）
+// clamp 到跟畫布保留 MIN_DRAG_OVERLAP px 重疊的範圍內。單一物件拖曳的 dragBoundFunc（lead）
+// 跟鎖定分組拖曳連動時非 lead 成員的手動搬動共用同一份邏輯，確保兩條路徑都不會被拖出畫布外
+// 看不到也點不到（分組連動繞過 Konva 原生 drag 事件，dragBoundFunc 不會自動套用到這些成員）。
+function clampNodeTargetPosition(
+  node: Konva.Node,
+  stage: Konva.Stage,
+  targetLocal: { x: number; y: number },
+  canvasWidth: number,
+  canvasHeight: number,
+): { x: number; y: number } {
+  // 拖曳只改變位置、不改變旋轉/縮放，位移量可以直接套用到目前的 bounding box 上
+  const currentRect = node.getClientRect({ relativeTo: stage });
+  const dx = targetLocal.x - node.x();
+  const dy = targetLocal.y - node.y();
+  const candidateRectX = currentRect.x + dx;
+  const candidateRectY = currentRect.y + dy;
+  const clampedRectX = clampOverlapAxis(candidateRectX, currentRect.width, canvasWidth);
+  const clampedRectY = clampOverlapAxis(candidateRectY, currentRect.height, canvasHeight);
+  return {
+    x: node.x() + (clampedRectX - currentRect.x),
+    y: node.y() + (clampedRectY - currentRect.y),
+  };
+}
 
 // 這幾種 shape 的 width/height 都綁死同一顆半徑，單選時必須鎖 keepRatio
 const UNIFORM_SCALE_CLASS_NAMES = new Set(["Text", "Circle", "RegularPolygon", "Star"]);
@@ -59,14 +98,25 @@ interface UseShapeSelectionResult {
   handleDragStart: (id: string) => (e: KonvaEventObject<DragEvent>) => void;
   handleDragMove: (id: string) => (e: KonvaEventObject<DragEvent>) => void;
   handleDragEnd: (id: string) => (e: KonvaEventObject<DragEvent>) => void;
+  handleDragBound: (id: string) => (pos: { x: number; y: number }) => { x: number; y: number }; // 拖曳範圍限制，不能整個拖出畫布
   handleTransformEnd: (id: string) => (e: KonvaEventObject<Event>) => void; // 縮放/旋轉結束後寫回屬性
   rotateAnchorStyleFunc: (anchor: Konva.Rect) => void; // 把旋轉控點的空白方塊換成 IconRotate 圖示
 }
 
 // 選取/拖曳/縮放/框選邏輯，selectedIds 讀寫 CanvasContext
 export function useShapeSelection(): UseShapeSelectionResult {
-  const { selectedId, selectedIds, setSelectedIds, setActiveId, selectShape, updateShape, updateShapes, shapes } =
-    useCanvas();
+  const {
+    selectedId,
+    selectedIds,
+    setSelectedIds,
+    setActiveId,
+    selectShape,
+    updateShape,
+    updateShapes,
+    shapes,
+    canvasWidth,
+    canvasHeight,
+  } = useCanvas();
   const transformerRef = useRef<Konva.Transformer>(null);
   // 每個 shape 目前掛載的 Konva node
   const shapeNodesRef = useRef<Map<string, Konva.Node>>(new Map());
@@ -256,6 +306,27 @@ export function useShapeSelection(): UseShapeSelectionResult {
     members: { id: string; x: number; y: number }[]; // 不含 lead 自己
   } | null>(null);
 
+  // 拖曳範圍限制：候選位置對應的 bounding box 至少要跟畫布保留 MIN_DRAG_OVERLAP px 的重疊，
+  // 不能整個被拖出畫布外（消失也點不到）。用 getClientRect 算絕對 bounding box，跟每種
+  // shape 自己的 x/y 錨點語意（左上角／中心點／線段起點）無關，不用針對每種類型分別處理。
+  const handleDragBound = useCallback(
+    (id: string) => (pos: { x: number; y: number }) => {
+      const node = shapeNodesRef.current.get(id);
+      const stage = node?.getStage();
+      const parent = node?.getParent();
+      if (!node || !stage || !parent) return pos;
+
+      // dragBoundFunc 收到的 pos 是「絕對座標」（screen space，含 Stage 自己的縮放/平移），
+      // 換算成跟 node.x()/y() 同座標系的 local 座標，才能算出這次候選位移量
+      const parentInverse = parent.getAbsoluteTransform().copy().invert();
+      const candidateLocal = parentInverse.point(pos);
+      const clampedLocal = clampNodeTargetPosition(node, stage, candidateLocal, canvasWidth, canvasHeight);
+
+      return parent.getAbsoluteTransform().point(clampedLocal);
+    },
+    [canvasWidth, canvasHeight],
+  );
+
   const handleDragStart = useCallback(
     (id: string) => (e: KonvaEventObject<DragEvent>) => {
       const shape = shapes.find((s) => s.id === id);
@@ -275,19 +346,29 @@ export function useShapeSelection(): UseShapeSelectionResult {
     [shapes],
   );
 
-  const handleDragMove = useCallback((id: string) => (e: KonvaEventObject<DragEvent>) => {
-    const dragState = groupDragRef.current;
-    if (!dragState || dragState.leadId !== id || dragState.members.length === 0) return;
+  const handleDragMove = useCallback(
+    (id: string) => (e: KonvaEventObject<DragEvent>) => {
+      const dragState = groupDragRef.current;
+      if (!dragState || dragState.leadId !== id || dragState.members.length === 0) return;
 
-    // 直接操作其他成員的 Konva node，維持即時視覺回饋
-    const deltaX = e.target.x() - dragState.leadStart.x;
-    const deltaY = e.target.y() - dragState.leadStart.y;
-    for (const member of dragState.members) {
-      shapeNodesRef.current.get(member.id)?.position({ x: member.x + deltaX, y: member.y + deltaY });
-    }
-    transformerRef.current?.forceUpdate(); // 手動搬動不會觸發 Transformer 監聽的 dragmove
-    e.target.getLayer()?.batchDraw();
-  }, []);
+      const stage = e.target.getStage();
+      // 直接操作其他成員的 Konva node，維持即時視覺回饋；每個成員的落點也各自套用
+      // clampNodeTargetPosition（跟 handleDragBound 共用同一份 clamp 邏輯），避免
+      // 整組共用的位移量在某個成員原本就貼近邊界時把它推到畫布外（看不到也點不到）——
+      // dragBoundFunc 只會對 Konva 原生拖曳的那個節點（lead）生效，不會自動套用到這裡
+      const deltaX = e.target.x() - dragState.leadStart.x;
+      const deltaY = e.target.y() - dragState.leadStart.y;
+      for (const member of dragState.members) {
+        const node = shapeNodesRef.current.get(member.id);
+        if (!node || !stage) continue;
+        const targetLocal = { x: member.x + deltaX, y: member.y + deltaY };
+        node.position(clampNodeTargetPosition(node, stage, targetLocal, canvasWidth, canvasHeight));
+      }
+      transformerRef.current?.forceUpdate(); // 手動搬動不會觸發 Transformer 監聽的 dragmove
+      e.target.getLayer()?.batchDraw();
+    },
+    [canvasWidth, canvasHeight],
+  );
 
   const handleDragEnd = useCallback(
     (id: string) => (e: KonvaEventObject<DragEvent>) => {
@@ -301,15 +382,21 @@ export function useShapeSelection(): UseShapeSelectionResult {
         return;
       }
 
-      // 整組一次寫回，只算一筆 undo entry
+      // 整組一次寫回，只算一筆 undo entry。每個成員的最終落點優先直接讀 Konva node
+      // （handleDragMove 已經對它套過 clampNodeTargetPosition），沒有 node（圖片還沒
+      // 載入完成、拖曳過程中完全沒有機會被 clamp）的成員沒有 bounding box 可以 clamp，
+      // 退回沿用位移量的既有行為——這是既有的、有記錄的邊界情況，不是這次新引入的問題
       const deltaX = e.target.x() - dragState.leadStart.x;
       const deltaY = e.target.y() - dragState.leadStart.y;
       updateShapes([
         { id, patch: leadPatch },
-        ...dragState.members.map((member) => ({
-          id: member.id,
-          patch: { x: Math.round(member.x + deltaX), y: Math.round(member.y + deltaY) },
-        })),
+        ...dragState.members.map((member) => {
+          const node = shapeNodesRef.current.get(member.id);
+          const patch = node
+            ? { x: Math.round(node.x()), y: Math.round(node.y()) }
+            : { x: Math.round(member.x + deltaX), y: Math.round(member.y + deltaY) };
+          return { id: member.id, patch };
+        }),
       ]);
     },
     [updateShape, updateShapes],
@@ -414,6 +501,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
     handleDragStart,
     handleDragMove,
     handleDragEnd,
+    handleDragBound,
     handleTransformEnd,
     rotateAnchorStyleFunc,
   };
