@@ -13,6 +13,7 @@ interface URLImageProps {
   onDragStart?: (e: KonvaEventObject<DragEvent>) => void;
   onDragMove?: (e: KonvaEventObject<DragEvent>) => void;
   onDragEnd?: (e: KonvaEventObject<DragEvent>) => void;
+  dragBoundFunc?: (pos: { x: number; y: number }) => { x: number; y: number };
   onTransformEnd?: (e: KonvaEventObject<Event>) => void;
 }
 

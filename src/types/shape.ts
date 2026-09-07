@@ -157,4 +157,5 @@ export interface CanvasSnapshot {
   shapes: CanvasShape[];
   canvasWidth: number;
   canvasHeight: number;
+  canvasBackgroundColor: string;
 }

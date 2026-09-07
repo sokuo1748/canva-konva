@@ -13,6 +13,7 @@ import { DEFAULT_FONT_FAMILY } from "../constants/fontFamilies";
 // 畫布尺寸初始值
 const DEFAULT_CANVAS_WIDTH = 800;
 const DEFAULT_CANVAS_HEIGHT = 800;
+const DEFAULT_CANVAS_BACKGROUND_COLOR = "#ffffff";
 const SQUARE_SIZE = 100;
 const SQUARE_DEFAULT_CORNER_RADIUS = 0;
 const DEFAULT_ROTATION = 0;
@@ -86,6 +87,8 @@ interface CanvasContextValue {
   canvasWidth: number; // 畫布寬度
   canvasHeight: number; // 畫布高度
   setCanvasSize: (width: number, height: number) => void; // 調整畫布尺寸
+  canvasBackgroundColor: string; // 畫布背景色
+  setCanvasBackgroundColor: (color: string) => void; // 調整畫布背景色
   selectedId: string | null; // 單選時的衍生值，唯讀
   selectedIds: string[]; // 目前選取的物件 id
   setSelectedIds: (ids: string[]) => void; // 設定選取的物件
@@ -123,6 +126,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   const [shapes, setShapes] = useState<CanvasShape[]>([]);
   const [canvasWidth, setCanvasWidth] = useState(DEFAULT_CANVAS_WIDTH);
   const [canvasHeight, setCanvasHeight] = useState(DEFAULT_CANVAS_HEIGHT);
+  const [canvasBackgroundColor, setCanvasBackgroundColorRaw] = useState(DEFAULT_CANVAS_BACKGROUND_COLOR);
   const [selectedIds, setSelectedIdsRaw] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
@@ -190,15 +194,16 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
 
   // 推入 undo 歷史並清空 redo
   const pushHistoryEntry = useCallback(() => {
-    setPast((prev) => [...prev, { shapes, canvasWidth, canvasHeight }]);
+    setPast((prev) => [...prev, { shapes, canvasWidth, canvasHeight, canvasBackgroundColor }]);
     setFuture([]);
-  }, [shapes, canvasWidth, canvasHeight]);
+  }, [shapes, canvasWidth, canvasHeight, canvasBackgroundColor]);
 
   // 還原一筆快照到畫布
   const applySnapshot = useCallback((entry: CanvasSnapshot) => {
     setShapes(entry.shapes);
     setCanvasWidth(entry.canvasWidth);
     setCanvasHeight(entry.canvasHeight);
+    setCanvasBackgroundColorRaw(entry.canvasBackgroundColor);
     setSelectedIds((prev) => prev.filter((id) => entry.shapes.some((s) => s.id === id)));
     setActiveId((prev) => (prev && entry.shapes.some((s) => s.id === prev) ? prev : null));
   }, [setSelectedIds]);
@@ -676,23 +681,32 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [pushHistoryEntry],
   );
 
+  // 調整畫布背景色
+  const setCanvasBackgroundColor = useCallback(
+    (color: string) => {
+      pushHistoryEntry();
+      setCanvasBackgroundColorRaw(color);
+    },
+    [pushHistoryEntry],
+  );
+
   // 復原
   const undo = useCallback(() => {
     if (past.length === 0) return;
     const previousEntry = past[past.length - 1];
     setPast((prev) => prev.slice(0, -1));
-    setFuture((prev) => [...prev, { shapes, canvasWidth, canvasHeight }]);
+    setFuture((prev) => [...prev, { shapes, canvasWidth, canvasHeight, canvasBackgroundColor }]);
     applySnapshot(previousEntry);
-  }, [past, shapes, canvasWidth, canvasHeight, applySnapshot]);
+  }, [past, shapes, canvasWidth, canvasHeight, canvasBackgroundColor, applySnapshot]);
 
   // 取消復原
   const redo = useCallback(() => {
     if (future.length === 0) return;
     const nextEntry = future[future.length - 1];
     setFuture((prev) => prev.slice(0, -1));
-    setPast((prev) => [...prev, { shapes, canvasWidth, canvasHeight }]);
+    setPast((prev) => [...prev, { shapes, canvasWidth, canvasHeight, canvasBackgroundColor }]);
     applySnapshot(nextEntry);
-  }, [future, shapes, canvasWidth, canvasHeight, applySnapshot]);
+  }, [future, shapes, canvasWidth, canvasHeight, canvasBackgroundColor, applySnapshot]);
 
   const canUndo = past.length > 0;
   const canRedo = future.length > 0;
@@ -701,8 +715,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   const snapshotRef = useRef<string>("");
 
   useEffect(() => {
-    snapshotRef.current = JSON.stringify({ shapes, canvasWidth, canvasHeight });
-  }, [shapes, canvasWidth, canvasHeight]);
+    snapshotRef.current = JSON.stringify({ shapes, canvasWidth, canvasHeight, canvasBackgroundColor });
+  }, [shapes, canvasWidth, canvasHeight, canvasBackgroundColor]);
 
   const getSnapshot = useCallback(() => snapshotRef.current, []); // 取得目前畫布資料的 JSON 快照
 
@@ -730,6 +744,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       canvasWidth,
       canvasHeight,
       setCanvasSize,
+      canvasBackgroundColor,
+      setCanvasBackgroundColor,
       selectedId,
       selectedIds,
       setSelectedIds,
@@ -784,6 +800,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       canvasWidth,
       canvasHeight,
       setCanvasSize,
+      canvasBackgroundColor,
+      setCanvasBackgroundColor,
       selectedId,
       selectedIds,
       setSelectedIds,
