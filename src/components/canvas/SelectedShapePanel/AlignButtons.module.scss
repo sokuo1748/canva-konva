@@ -1,0 +1,7 @@
+// 9 顆對齊按鈕靠 flex-wrap 自然換行，面板寬度（256px）扣掉左右 padding 後，
+// 32px 的 IconButtonUI + 8px gap 自然會落成兩列（5~6 顆一列），不用手動拆固定幾+幾。
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
