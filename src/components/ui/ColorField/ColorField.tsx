@@ -7,12 +7,13 @@ interface ColorFieldProps {
   label: string;
   value: string;
   onCommit: (value: string) => void;
+  muted?: boolean; // 只是視覺上降低存在感（例如 strokeEnabled 關閉時），選色/commit 功能不受影響
 }
 
 // 顏色屬性欄位，onChange 直接 commit（不經過 useFieldDraft）
-export function ColorField({ label, value, onCommit }: ColorFieldProps) {
+export function ColorField({ label, value, onCommit, muted = false }: ColorFieldProps) {
   return (
-    <label className={styles.field}>
+    <label className={muted ? `${styles.field} ${styles.muted}` : styles.field}>
       <span className={styles.label}>{label}</span>
       <InputUI
         type="color"

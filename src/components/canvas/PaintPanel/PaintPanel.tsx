@@ -7,6 +7,8 @@ import {
   MAX_ERASER_SIZE,
   MIN_BRUSH_SIZE,
   MIN_ERASER_SIZE,
+  MIN_OPACITY,
+  MAX_OPACITY,
 } from "../../../constants/shapeConstraints";
 import { NumberField } from "../../ui/NumberField/NumberField";
 import { ColorField } from "../../ui/ColorField/ColorField";
@@ -26,6 +28,8 @@ export function PaintPanel() {
     setBrushCap,
     eraserSize,
     setEraserSize,
+    brushOpacity,
+    setBrushOpacity,
   } = useCanvas();
 
   return (
@@ -55,6 +59,14 @@ export function PaintPanel() {
             max={MAX_BRUSH_SIZE}
             round
             onCommit={setBrushSize}
+          />
+          <NumberField
+            label="透明度"
+            value={brushOpacity}
+            min={MIN_OPACITY}
+            max={MAX_OPACITY}
+            round
+            onCommit={setBrushOpacity}
           />
           {/* 筆刷頭部形狀 */}
           <div className={styles.toolRow}>

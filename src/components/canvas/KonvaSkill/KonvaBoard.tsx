@@ -58,6 +58,7 @@ export function KonvaBoard() {
     brushSize,
     brushCap,
     eraserSize,
+    brushOpacity,
   } = useCanvas();
   const {
     marqueeRect,
@@ -138,6 +139,7 @@ export function KonvaBoard() {
       lineCap={activeTool === "eraser" || brushCap === "round" ? "round" : "square"}
       lineJoin={activeTool === "eraser" || brushCap === "round" ? "round" : "miter"}
       globalCompositeOperation={activeTool === "eraser" ? "destination-out" : "source-over"}
+      opacity={activeTool === "eraser" ? 1 : brushOpacity / 100}
       listening={false}
     />
   );
@@ -204,6 +206,7 @@ export function KonvaBoard() {
                     lineJoin={shape.cap === "round" ? "round" : "miter"}
                     globalCompositeOperation={shape.tool === "eraser" ? "destination-out" : "source-over"}
                     strokeScaleEnabled={false}
+                    opacity={shape.opacity / 100}
                     {...commonHandlers}
                   />
                 );
@@ -226,6 +229,7 @@ export function KonvaBoard() {
                     textDecoration={[shape.underline && "underline", shape.strikethrough && "line-through"]
                       .filter(Boolean)
                       .join(" ")}
+                    opacity={shape.opacity / 100}
                     {...commonHandlers}
                   />
                 );
@@ -255,6 +259,10 @@ export function KonvaBoard() {
                     scaleX={shape.width / (SHAPE_BASE_RADIUS * 2)}
                     scaleY={shape.height / (SHAPE_BASE_RADIUS * 2)}
                     fill={shape.fill}
+                    stroke={shape.strokeEnabled ? shape.stroke : undefined}
+                    strokeWidth={shape.strokeEnabled ? shape.strokeWidth : undefined}
+                    strokeScaleEnabled={false} // 避免縮放時邊框粗細跟著視覺拉伸
+                    opacity={shape.opacity / 100}
                     {...commonHandlers}
                   />
                 );
@@ -274,6 +282,10 @@ export function KonvaBoard() {
                     scaleX={shape.width / (SHAPE_BASE_RADIUS * 2)}
                     scaleY={shape.height / (SHAPE_BASE_RADIUS * 2)}
                     fill={shape.fill}
+                    stroke={shape.strokeEnabled ? shape.stroke : undefined}
+                    strokeWidth={shape.strokeEnabled ? shape.strokeWidth : undefined}
+                    strokeScaleEnabled={false}
+                    opacity={shape.opacity / 100}
                     {...commonHandlers}
                   />
                 );
@@ -292,6 +304,10 @@ export function KonvaBoard() {
                     innerRadius={shape.size / 4}
                     outerRadius={shape.size / 2}
                     fill={shape.fill}
+                    stroke={shape.strokeEnabled ? shape.stroke : undefined}
+                    strokeWidth={shape.strokeEnabled ? shape.strokeWidth : undefined}
+                    strokeScaleEnabled={false}
+                    opacity={shape.opacity / 100}
                     {...commonHandlers}
                   />
                 );
@@ -311,6 +327,7 @@ export function KonvaBoard() {
                     strokeWidth={shape.strokeWidth}
                     dash={shape.dash}
                     strokeScaleEnabled={false} // 避免縮放時筆畫粗細跟著視覺拉伸
+                    opacity={shape.opacity / 100}
                     {...commonHandlers}
                   />
                 );
@@ -328,6 +345,10 @@ export function KonvaBoard() {
                   height={shape.height}
                   fill={shape.fill}
                   cornerRadius={shape.cornerRadius}
+                  stroke={shape.strokeEnabled ? shape.stroke : undefined}
+                  strokeWidth={shape.strokeEnabled ? shape.strokeWidth : undefined}
+                  strokeScaleEnabled={false} // 避免縮放時邊框粗細跟著視覺拉伸
+                  opacity={shape.opacity / 100}
                   {...commonHandlers}
                 />
               );

@@ -10,6 +10,32 @@
   overflow: hidden;
   color: $color-text-inverse;
   font-size: $font-size-base;
+  // panelRight（CanvasWorkspace.module.scss 的 .panel）是 flex column 且有固定高度
+  // （由 .body 的 flex row + align-items:stretch 撐出來），這個 pill 是它的 flex item。
+  // 因為上面的 overflow:hidden（圓角裁切必須），這個元素在 flex 主軸（垂直）上的
+  // automatic minimum size 會被瀏覽器算成 0（CSS Flexbox 規格：overflow 非 visible
+  // 的 flex item，自動最小尺寸是 0，不是 min-content）——一旦下面的
+  // ShapePropertiesForm（新增 stroke/border toggle 欄位後變更高）撐爆 panelRight
+  // 的可視高度，flex-shrink 預設值 1 就會優先把「floor 是 0」的這個 pill 往 0 壓，
+  // 而不是讓 panelRight 自己捲動（表單 .form 沒有 overflow:hidden，min-height 是
+  // content-based，撐不動就不太會被壓，於是壓力全部轉嫁到這個 pill 上）。
+  // flex-shrink: 0 讓這個 pill 永遠維持自然高度，多出來的內容交給 panelRight
+  // 既有的 overflow-y: auto 捲動處理，不會再被擠壓/跑版/消失。
+  flex-shrink: 0;
+
+  // 固定在 panelRight 捲動容器頂端：pill 跟 ShapePropertiesForm 都是 panelRight
+  // （.panelRight，overflow-y: auto）的直接子元素，中間沒有其他 overflow:hidden
+  // 的祖先層，position: sticky 可以直接生效，不需要另外拆出一層內層捲動容器。
+  // z-index 確保往上捲動的表單內容被壓在 pill 下面（sticky 元素預設仍照 DOM
+  // 順序疊放，不會自動蓋過後面的內容）。
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  // 沒有另外加 border-bottom 當分隔線：上面第 7 行的 border shorthand 本來就
+  // 是四邊完整的 2px 實色框，寬度又跟下方 ShapePropertiesForm 同寬、背景不透明，
+  // 視覺上 pill 下緣那條邊框本身就完整扮演了分隔線的角色。之後如果為了別的
+  // 視覺需求把這個 border 改成只設左右（例如「膠囊只留側邊描邊」），要記得
+  // 這條分隔線也會跟著消失，需要另外補一條 border-bottom。
 }
 
 .label,

@@ -11,10 +11,11 @@ interface NumberFieldProps {
   min?: number;
   max?: number;
   round?: boolean; // 是否強制四捨五入成整數
+  muted?: boolean; // 只是視覺上降低存在感（例如 strokeEnabled 關閉時），輸入/commit 功能不受影響
 }
 
 // 數字屬性欄位（x/y/width/height/fontSize 等）
-export function NumberField({ label, value, onCommit, min, max, round = false }: NumberFieldProps) {
+export function NumberField({ label, value, onCommit, min, max, round = false, muted = false }: NumberFieldProps) {
   const { displayValue, handleFocus, handleChange, commit } = useFieldDraft<number>(
     value,
     (v) => String(v),
@@ -34,7 +35,7 @@ export function NumberField({ label, value, onCommit, min, max, round = false }:
   );
 
   return (
-    <label className={styles.field}>
+    <label className={muted ? `${styles.field} ${styles.muted}` : styles.field}>
       <span className={styles.label}>{label}</span>
       <InputUI
         type="number"

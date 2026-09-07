@@ -14,3 +14,7 @@ export const ERASER_STROKE_COLOR = "#000000";
 // 畫布尺寸上下限
 export const MIN_CANVAS_SIZE = 100;
 export const MAX_CANVAS_SIZE = 4000;
+
+// 透明度：0~100 整數百分比，渲染到 Konva 時再除以 100
+export const MIN_OPACITY = 0;
+export const MAX_OPACITY = 100;

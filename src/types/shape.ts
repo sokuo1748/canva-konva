@@ -9,8 +9,12 @@ export interface RectShape {
   fill: string;
   cornerRadius: number;
   rotation: number;
+  opacity: number; // 0~100 整數百分比，渲染到 Konva 時除以 100
   lockAspectRatio: boolean; // 縮放時是否鎖定寬高比
   groupId?: string; // 有值代表被鎖定進某個圖層群組
+  stroke: string; // 邊框顏色
+  strokeWidth: number; // 邊框粗度
+  strokeEnabled: boolean; // 是否顯示邊框，取代原本用 strokeWidth: 0 表示不顯示的隱性寫法
 }
 
 // 文字（Konva.Text 依內容自動算寬高，沒有 width/height）
@@ -23,6 +27,7 @@ export interface TextShape {
   fontSize: number;
   fill: string;
   rotation: number;
+  opacity: number;
   groupId?: string;
   bold?: boolean;
   underline?: boolean;
@@ -40,6 +45,7 @@ export interface ImageShape {
   height: number;
   src: string;
   rotation: number;
+  opacity: number;
   lockAspectRatio: boolean; // 縮放時是否鎖定寬高比
   groupId?: string;
 }
@@ -54,8 +60,12 @@ export interface CircleShape {
   height: number;
   fill: string;
   rotation: number;
+  opacity: number;
   lockAspectRatio: boolean; // 縮放時是否鎖定寬高比
   groupId?: string;
+  stroke: string; // 邊框顏色
+  strokeWidth: number; // 邊框粗度
+  strokeEnabled: boolean; // 是否顯示邊框，取代原本用 strokeWidth: 0 表示不顯示的隱性寫法
 }
 
 // 三角形（Konva.RegularPolygon，sides 固定 3，存 width/height 可獨立拉伸成不等邊，x/y 是中心點）
@@ -68,8 +78,12 @@ export interface TriangleShape {
   height: number;
   fill: string;
   rotation: number;
+  opacity: number;
   lockAspectRatio: boolean; // 縮放時是否鎖定寬高比
   groupId?: string;
+  stroke: string; // 邊框顏色
+  strokeWidth: number; // 邊框粗度
+  strokeEnabled: boolean; // 是否顯示邊框，取代原本用 strokeWidth: 0 表示不顯示的隱性寫法
 }
 
 // 星形（固定 5 點，x/y 是中心點）
@@ -81,7 +95,11 @@ export interface StarShape {
   size: number;
   fill: string;
   rotation: number;
+  opacity: number;
   groupId?: string;
+  stroke: string; // 邊框顏色
+  strokeWidth: number; // 邊框粗度
+  strokeEnabled: boolean; // 是否顯示邊框，取代原本用 strokeWidth: 0 表示不顯示的隱性寫法
 }
 
 // 直線/虛線（points 是相對 x/y 的本地座標，x/y 是線段起點，dash 有值才是虛線）
@@ -95,6 +113,7 @@ export interface LineShape {
   strokeWidth: number;
   dash?: number[];
   rotation: number;
+  opacity: number;
   groupId?: string;
 }
 
@@ -113,6 +132,7 @@ export interface BrushShape {
   cap: BrushCap;
   tool: BrushToolKind;
   rotation: number;
+  opacity: number; // 橡皮擦目前固定 100，只有畫筆筆畫在 PaintPanel 可調（見 CanvasContext）
   groupId?: string;
 }
 
@@ -138,12 +158,14 @@ export type ShapePatch = Partial<{
   src: string;
   cornerRadius: number;
   rotation: number;
+  opacity: number;
   groupId: string;
   lockAspectRatio: boolean;
   size: number;
   points: number[];
   stroke: string;
   strokeWidth: number;
+  strokeEnabled: boolean;
   dash: number[];
   cap: BrushCap;
   bold: boolean;

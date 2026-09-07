@@ -63,6 +63,7 @@ export const URLImage = forwardRef<Konva.Image, URLImageProps>(function URLImage
       rotation={shape.rotation}
       width={shape.width}
       height={shape.height}
+      opacity={shape.opacity / 100}
       {...handlers}
     />
   );

@@ -26,6 +26,11 @@ const MAX_IMAGE_DIMENSION = 400;
 // 圓形/三角形/星形/線的預設插入尺寸
 const SHAPE_DEFAULT_SIZE = 100;
 const LINE_DEFAULT_STROKE_WIDTH = 4;
+// Rect/Circle/Triangle/Star 的邊框預設值：strokeEnabled 預設 false，維持「新增形狀預設沒有
+// 邊框」的既有視覺；顏色/粗度預設值刻意設得顯眼，讓使用者一打開開關就有明顯效果
+const SHAPE_DEFAULT_STROKE = "#ff0000";
+const SHAPE_DEFAULT_STROKE_WIDTH = 5;
+const SHAPE_DEFAULT_STROKE_ENABLED = false;
 // 虛線的預設 dash pattern
 const LINE_DASH_PATTERN = [12, 8];
 // 畫筆/橡皮擦工具參數預設值
@@ -33,6 +38,9 @@ const DEFAULT_BRUSH_COLOR = "#000000";
 const DEFAULT_BRUSH_SIZE = 8;
 const DEFAULT_BRUSH_CAP: BrushCap = "round";
 const DEFAULT_ERASER_SIZE = 20;
+// 一般 shape 新增時預設不透明；橡皮擦筆畫固定不透明（destination-out 擦除不開放調整）
+const DEFAULT_OPACITY = 100;
+const DEFAULT_BRUSH_OPACITY = 100;
 // 貼上時跟原本位置的位移量，讓使用者能明顯區分新舊物件
 const PASTE_OFFSET = 20;
 
@@ -73,6 +81,7 @@ interface CanvasContextValue {
     stroke: string;
     strokeWidth: number;
     cap: BrushCap;
+    opacity: number;
   }) => void;
   updateShape: (id: string, patch: ShapePatch) => void; // 更新單一物件屬性
   updateShapes: (patches: { id: string; patch: ShapePatch }[]) => void; // 批次更新多個物件屬性
@@ -110,6 +119,8 @@ interface CanvasContextValue {
   setBrushCap: (cap: BrushCap) => void; // 設定筆刷形狀
   eraserSize: number; // 橡皮擦大小
   setEraserSize: (size: number) => void; // 設定橡皮擦大小
+  brushOpacity: number; // 畫筆透明度（0~100），橡皮擦不開放調整
+  setBrushOpacity: (opacity: number) => void; // 設定畫筆透明度
   undo: () => void; // 復原
   redo: () => void; // 取消復原
   canUndo: boolean; // 是否可復原
@@ -145,6 +156,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   const [brushSize, setBrushSize] = useState(DEFAULT_BRUSH_SIZE);
   const [brushCap, setBrushCap] = useState<BrushCap>(DEFAULT_BRUSH_CAP);
   const [eraserSize, setEraserSize] = useState(DEFAULT_ERASER_SIZE);
+  const [brushOpacity, setBrushOpacity] = useState(DEFAULT_BRUSH_OPACITY);
 
   // 切到畫筆/橡皮擦模式時關閉選單並清空選取
   const setActiveTool = useCallback((tool: "select" | "brush" | "eraser") => {
@@ -224,7 +236,11 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         fill: "#000000",
         cornerRadius: SQUARE_DEFAULT_CORNER_RADIUS,
         rotation: DEFAULT_ROTATION,
+        opacity: DEFAULT_OPACITY,
         lockAspectRatio: false,
+        stroke: SHAPE_DEFAULT_STROKE,
+        strokeWidth: SHAPE_DEFAULT_STROKE_WIDTH,
+        strokeEnabled: SHAPE_DEFAULT_STROKE_ENABLED,
       },
     ]);
     setSelectedIds([id]);
@@ -247,6 +263,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         fontFamily: DEFAULT_FONT_FAMILY,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
+        opacity: DEFAULT_OPACITY,
       },
     ]);
     setSelectedIds([id]);
@@ -278,6 +295,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
           height,
           src,
           rotation: DEFAULT_ROTATION,
+          opacity: DEFAULT_OPACITY,
           lockAspectRatio: false,
         },
       ]);
@@ -302,7 +320,11 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         height: SHAPE_DEFAULT_SIZE,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
+        opacity: DEFAULT_OPACITY,
         lockAspectRatio: false,
+        stroke: SHAPE_DEFAULT_STROKE,
+        strokeWidth: SHAPE_DEFAULT_STROKE_WIDTH,
+        strokeEnabled: SHAPE_DEFAULT_STROKE_ENABLED,
       },
     ]);
     setSelectedIds([id]);
@@ -324,7 +346,11 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         height: SHAPE_DEFAULT_SIZE,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
+        opacity: DEFAULT_OPACITY,
         lockAspectRatio: false,
+        stroke: SHAPE_DEFAULT_STROKE,
+        strokeWidth: SHAPE_DEFAULT_STROKE_WIDTH,
+        strokeEnabled: SHAPE_DEFAULT_STROKE_ENABLED,
       },
     ]);
     setSelectedIds([id]);
@@ -345,6 +371,10 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         size: SHAPE_DEFAULT_SIZE,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
+        opacity: DEFAULT_OPACITY,
+        stroke: SHAPE_DEFAULT_STROKE,
+        strokeWidth: SHAPE_DEFAULT_STROKE_WIDTH,
+        strokeEnabled: SHAPE_DEFAULT_STROKE_ENABLED,
       },
     ]);
     setSelectedIds([id]);
@@ -368,6 +398,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
           strokeWidth: LINE_DEFAULT_STROKE_WIDTH,
           dash: dashed ? LINE_DASH_PATTERN : undefined,
           rotation: DEFAULT_ROTATION,
+          opacity: DEFAULT_OPACITY,
         },
       ]);
       setSelectedIds([id]);
@@ -386,6 +417,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       stroke: string;
       strokeWidth: number;
       cap: BrushCap;
+      opacity: number;
     }) => {
       pushHistoryEntry();
       const id = nextId("brush");
@@ -401,6 +433,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
           strokeWidth: params.strokeWidth,
           cap: params.cap,
           tool: params.tool,
+          opacity: params.opacity,
           rotation: DEFAULT_ROTATION,
         },
       ]);
@@ -767,6 +800,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       setBrushCap,
       eraserSize,
       setEraserSize,
+      brushOpacity,
+      setBrushOpacity,
       undo,
       redo,
       canUndo,
@@ -823,6 +858,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       setBrushCap,
       eraserSize,
       setEraserSize,
+      brushOpacity,
+      setBrushOpacity,
       undo,
       redo,
       canUndo,
