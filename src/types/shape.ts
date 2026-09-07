@@ -9,6 +9,7 @@ export interface RectShape {
   fill: string;
   cornerRadius: number;
   rotation: number;
+  lockAspectRatio: boolean; // 縮放時是否鎖定寬高比
   groupId?: string; // 有值代表被鎖定進某個圖層群組
 }
 
@@ -26,6 +27,7 @@ export interface TextShape {
   bold?: boolean;
   underline?: boolean;
   strikethrough?: boolean;
+  fontFamily?: string;
 }
 
 // 圖片（src 存 base64 data URL，才能被 getSnapshot() 序列化保存）
@@ -38,30 +40,35 @@ export interface ImageShape {
   height: number;
   src: string;
   rotation: number;
+  lockAspectRatio: boolean; // 縮放時是否鎖定寬高比
   groupId?: string;
 }
 
-// 圓形（只存 size 直徑，x/y 是中心點）
+// 圓形（存 width/height 可獨立拉伸成橢圓，x/y 是中心點）
 export interface CircleShape {
   id: string;
   type: "circle";
   x: number;
   y: number;
-  size: number;
+  width: number;
+  height: number;
   fill: string;
   rotation: number;
+  lockAspectRatio: boolean; // 縮放時是否鎖定寬高比
   groupId?: string;
 }
 
-// 三角形（Konva.RegularPolygon，sides 固定 3，x/y 是中心點）
+// 三角形（Konva.RegularPolygon，sides 固定 3，存 width/height 可獨立拉伸成不等邊，x/y 是中心點）
 export interface TriangleShape {
   id: string;
   type: "triangle";
   x: number;
   y: number;
-  size: number;
+  width: number;
+  height: number;
   fill: string;
   rotation: number;
+  lockAspectRatio: boolean; // 縮放時是否鎖定寬高比
   groupId?: string;
 }
 
@@ -132,6 +139,7 @@ export type ShapePatch = Partial<{
   cornerRadius: number;
   rotation: number;
   groupId: string;
+  lockAspectRatio: boolean;
   size: number;
   points: number[];
   stroke: string;
@@ -141,6 +149,7 @@ export type ShapePatch = Partial<{
   bold: boolean;
   underline: boolean;
   strikethrough: boolean;
+  fontFamily: string;
 }>;
 
 // undo/redo 用的畫布快照

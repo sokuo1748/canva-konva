@@ -56,6 +56,7 @@ export const URLImage = forwardRef<Konva.Image, URLImageProps>(function URLImage
   return (
     <KonvaImage
       ref={ref}
+      id={shape.id}
       image={image}
       x={shape.x}
       y={shape.y}
