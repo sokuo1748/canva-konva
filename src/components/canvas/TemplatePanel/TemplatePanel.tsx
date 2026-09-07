@@ -58,6 +58,7 @@ export function TemplatePanel() {
           selectedStyle="template"
           width="100%"
           height={60}
+          active={item.id === "paint" ? activeTool !== "select" : undefined}
           onClick={
             item.id === "shape"
               ? () => {

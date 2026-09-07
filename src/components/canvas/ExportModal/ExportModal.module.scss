@@ -16,3 +16,36 @@
   color: $color-text;
   opacity: 0.6;
 }
+
+// 檔案格式選擇，只有 ExportModal 用，不獨立成 ui/ 元件
+.formatField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.formatLabel {
+  font-size: $font-size-base;
+  color: $color-text;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+// 樣式沿用 InputUI.module.scss 的 .input，維持同一套欄位視覺語言
+.formatSelect {
+  flex: 1;
+  height: 40px;
+  border: 2px solid $color-button-outline-border;
+  border-radius: $radius-base;
+  padding: 0 10px;
+  font-size: $font-size-base;
+  color: $color-text;
+  background-color: #ffffff;
+  cursor: pointer;
+
+  &:focus {
+    outline: 2px solid $color-button-outline-border;
+    outline-offset: -1px;
+  }
+}

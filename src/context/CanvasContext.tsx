@@ -6,6 +6,9 @@ import type Konva from "konva";
 import type { BrushCap, BrushToolKind, CanvasShape, CanvasSnapshot, ShapePatch } from "../types/shape";
 import { toggleSelection } from "../utils/selection";
 import { MIN_CANVAS_SIZE, MAX_CANVAS_SIZE } from "../constants/shapeConstraints";
+import type { AlignMode } from "../utils/align";
+import { computeAlignDelta, getShapeLogicalRect, unionRects } from "../utils/align";
+import { DEFAULT_FONT_FAMILY } from "../constants/fontFamilies";
 
 // 畫布尺寸初始值
 const DEFAULT_CANVAS_WIDTH = 800;
@@ -37,6 +40,27 @@ const DEFAULT_ERASER_SIZE = 20;
 // 一般 shape 新增時預設不透明；橡皮擦筆畫固定不透明（destination-out 擦除不開放調整）
 const DEFAULT_OPACITY = 100;
 const DEFAULT_BRUSH_OPACITY = 100;
+// 貼上時跟原本位置的位移量，讓使用者能明顯區分新舊物件
+const PASTE_OFFSET = 20;
+
+// shape.type 對應到 nextId() 的 prefix（"rect" 沿用既有的 "shape" 前綴，不是巧合命名錯誤）
+const TYPE_TO_ID_PREFIX: Record<
+  CanvasShape["type"],
+  "shape" | "text" | "image" | "circle" | "triangle" | "star" | "line" | "brush"
+> = {
+  rect: "shape",
+  text: "text",
+  image: "image",
+  circle: "circle",
+  triangle: "triangle",
+  star: "star",
+  line: "line",
+  brush: "brush",
+};
+
+// 對齊模式（完整 3x3 方位）定義在 utils/align.ts（純函式，不依賴 Konva/React），這裡單純
+// re-export 給 Toolbar/panelRight 消費，維持既有「AlignMode 從 CanvasContext 匯出」的呼叫慣例
+export type { AlignMode };
 
 interface CanvasContextValue {
   shapes: CanvasShape[]; // 畫布上所有物件
@@ -60,9 +84,13 @@ interface CanvasContextValue {
   }) => void;
   updateShape: (id: string, patch: ShapePatch) => void; // 更新單一物件屬性
   updateShapes: (patches: { id: string; patch: ShapePatch }[]) => void; // 批次更新多個物件屬性
+  alignShapes: (ids: string[], mode: AlignMode) => void; // 對齊選取物件到畫布邊界/中心
   reorderShapes: (orderedIds: string[]) => void; // 依圖層清單拖曳結果重新排序
   deleteShape: (id: string) => void; // 刪除單一物件
   deleteShapes: (ids: string[]) => void; // 批次刪除多個物件
+  copyShapes: (ids: string[]) => void; // 複製到 clipboard（純 UI 暫態，不進 history）
+  cutShapes: (ids: string[]) => void; // 複製後刪除
+  pasteShapes: () => void; // 貼上 clipboard 內容，產生新 id 並套用位移，只推一筆 history
   resetCanvas: () => void; // 清空畫布
   canvasWidth: number; // 畫布寬度
   canvasHeight: number; // 畫布高度
@@ -204,6 +232,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         cornerRadius: SQUARE_DEFAULT_CORNER_RADIUS,
         rotation: DEFAULT_ROTATION,
         opacity: DEFAULT_OPACITY,
+        lockAspectRatio: false,
         stroke: SHAPE_DEFAULT_STROKE,
         strokeWidth: SHAPE_DEFAULT_STROKE_WIDTH,
         strokeEnabled: SHAPE_DEFAULT_STROKE_ENABLED,
@@ -226,6 +255,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         y: (canvasHeight - TEXT_DEFAULT_FONT_SIZE) / 2,
         text: TEXT_DEFAULT_CONTENT,
         fontSize: TEXT_DEFAULT_FONT_SIZE,
+        fontFamily: DEFAULT_FONT_FAMILY,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
         opacity: DEFAULT_OPACITY,
@@ -261,6 +291,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
           src,
           rotation: DEFAULT_ROTATION,
           opacity: DEFAULT_OPACITY,
+          lockAspectRatio: false,
         },
       ]);
       setSelectedIds([id]);
@@ -269,7 +300,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [canvasWidth, canvasHeight, nextId, pushHistoryEntry, setSelectedIds],
   );
 
-  // 新增圓形（x/y 是中心點）
+  // 新增圓形（x/y 是中心點；width/height 可獨立拉伸成橢圓，見 CLAUDE.md）
   const addCircle = useCallback(() => {
     pushHistoryEntry();
     const id = nextId("circle");
@@ -280,10 +311,12 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         type: "circle",
         x: canvasWidth / 2,
         y: canvasHeight / 2,
-        size: SHAPE_DEFAULT_SIZE,
+        width: SHAPE_DEFAULT_SIZE,
+        height: SHAPE_DEFAULT_SIZE,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
         opacity: DEFAULT_OPACITY,
+        lockAspectRatio: false,
         stroke: SHAPE_DEFAULT_STROKE,
         strokeWidth: SHAPE_DEFAULT_STROKE_WIDTH,
         strokeEnabled: SHAPE_DEFAULT_STROKE_ENABLED,
@@ -293,7 +326,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     setActiveId(id);
   }, [canvasWidth, canvasHeight, nextId, pushHistoryEntry, setSelectedIds]);
 
-  // 新增三角形（x/y 是中心點）
+  // 新增三角形（x/y 是中心點；width/height 可獨立拉伸成不等邊，見 CLAUDE.md）
   const addTriangle = useCallback(() => {
     pushHistoryEntry();
     const id = nextId("triangle");
@@ -304,10 +337,12 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         type: "triangle",
         x: canvasWidth / 2,
         y: canvasHeight / 2,
-        size: SHAPE_DEFAULT_SIZE,
+        width: SHAPE_DEFAULT_SIZE,
+        height: SHAPE_DEFAULT_SIZE,
         fill: "#000000",
         rotation: DEFAULT_ROTATION,
         opacity: DEFAULT_OPACITY,
+        lockAspectRatio: false,
         stroke: SHAPE_DEFAULT_STROKE,
         strokeWidth: SHAPE_DEFAULT_STROKE_WIDTH,
         strokeEnabled: SHAPE_DEFAULT_STROKE_ENABLED,
@@ -428,6 +463,69 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [pushHistoryEntry],
   );
 
+  // 對齊選取物件到畫布邊界/中心（完整 3x3 方位），一次操作只推一筆 history。
+  // 一般情況每個被選取的 shape 各自獨立對齊；但如果 ids 剛好等於某個鎖定分組的全部成員，
+  // 改成對整組的聯集包圍盒算一次位移量、套用到每個成員，維持彼此的相對排列（跟拖曳分組的
+  // handleDragMove 連動精神一致，不會讓分組成員各自貼齊、彼此重疊）。
+  const alignShapes = useCallback(
+    (ids: string[], mode: AlignMode) => {
+      if (ids.length === 0) return;
+      const stage = stageRef.current;
+
+      // 取單一 shape 的畫布座標系包圍盒：優先讀 Konva node 的 getClientRect（考慮實際渲染狀態），
+      // 找不到 node（例如圖片還沒載入完成）就 fallback 用 shape 自己的資料算邏輯包圍盒
+      const getRect = (shape: CanvasShape) => {
+        const node = stage?.findOne<Konva.Node>(`#${shape.id}`);
+        if (node) return node.getClientRect({ relativeTo: stage! });
+        return getShapeLogicalRect(shape);
+      };
+
+      // 目前 ids 是否剛好等於某個既有鎖定分組的全部成員（比照 Toolbar 判斷 Lock/Unlock icon 的邏輯）
+      const firstGroupId = shapes.find((s) => s.id === ids[0])?.groupId;
+      const isWholeGroup =
+        ids.length >= 2 &&
+        !!firstGroupId &&
+        ids.every((id) => shapes.find((s) => s.id === id)?.groupId === firstGroupId) &&
+        shapes.filter((s) => s.groupId === firstGroupId).length === ids.length;
+
+      const patches: { id: string; patch: ShapePatch }[] = [];
+
+      if (isWholeGroup) {
+        const members = ids
+          .map((id) => shapes.find((s) => s.id === id))
+          .filter((s): s is CanvasShape => !!s);
+        const rects = members.map(getRect).filter((r): r is NonNullable<typeof r> => !!r);
+        const unionBox = unionRects(rects);
+        if (unionBox) {
+          const { deltaX, deltaY } = computeAlignDelta(unionBox, mode, canvasWidth, canvasHeight);
+          for (const shape of members) {
+            patches.push({
+              id: shape.id,
+              patch: { x: Math.round(shape.x + deltaX), y: Math.round(shape.y + deltaY) },
+            });
+          }
+        }
+      } else {
+        for (const id of ids) {
+          const shape = shapes.find((s) => s.id === id);
+          if (!shape) continue;
+          const rect = getRect(shape);
+          if (!rect) continue;
+          const { deltaX, deltaY } = computeAlignDelta(rect, mode, canvasWidth, canvasHeight);
+          patches.push({
+            id,
+            patch: { x: Math.round(shape.x + deltaX), y: Math.round(shape.y + deltaY) },
+          });
+        }
+      }
+
+      if (patches.length === 0) return;
+      setIsShapePickerOpen(false); // 手動關閉選單（不會經過 setSelectedIds，比照 lockShapes/unlockShapes）
+      updateShapes(patches);
+    },
+    [shapes, canvasWidth, canvasHeight, updateShapes],
+  );
+
   // 依圖層清單拖曳結果重新排序
   const reorderShapes = useCallback(
     (orderedIds: string[]) => {
@@ -491,6 +589,65 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   );
 
   const deleteShape = useCallback((id: string) => deleteShapes([id]), [deleteShapes]); // 刪除單一物件
+
+  // clipboard 是純 UI 暫態（跟 isShapePickerOpen 同類），不進 CanvasSnapshot，用 ref 存即可不用觸發 re-render
+  const clipboardRef = useRef<CanvasShape[]>([]);
+
+  // 複製選取物件到 clipboard；ids 為空時保留原本 clipboard 內容不動
+  const copyShapes = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      const idSet = new Set(ids);
+      const matched = shapes.filter((shape) => idSet.has(shape.id));
+      if (matched.length === 0) return;
+      clipboardRef.current = matched;
+    },
+    [shapes],
+  );
+
+  // 剪下：複製後刪除（刪除走既有 deleteShapes，自動推一筆 history）
+  const cutShapes = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      copyShapes(ids);
+      deleteShapes(ids);
+    },
+    [copyShapes, deleteShapes],
+  );
+
+  // 貼上 clipboard 內容：新 id、位移 PASTE_OFFSET；原本有 groupId 的成員會重新產生一個新 groupId
+  // （同一批貼上的鎖定分組彼此還是同一組，但跟畫布上原本的分組脫鉤，不會誤併入原組），只推一筆 history。
+  // 貼上後把 clipboard 內容本身換成剛貼上的結果（新 id + 新位置 + 新 groupId），讓連續按 Ctrl+V 每次都再疊加
+  // PASTE_OFFSET、呈階梯狀散開，而不是每次都疊在同一個位置；copyShapes/cutShapes 會整包覆蓋
+  // clipboardRef，因此重新複製一律回到「未疊加位移」的狀態，不會延續上一次貼上殘留的偏移
+  const pasteShapes = useCallback(() => {
+    if (clipboardRef.current.length === 0) return;
+    pushHistoryEntry();
+    const newIds: string[] = [];
+    const groupIdMap = new Map<string, string>(); // 原 groupId -> 這批貼上專用的新 groupId
+    const pasted = clipboardRef.current.map((shape) => {
+      const id = nextId(TYPE_TO_ID_PREFIX[shape.type]);
+      newIds.push(id);
+      let groupId: string | undefined;
+      if (shape.groupId) {
+        if (!groupIdMap.has(shape.groupId)) {
+          groupIdMap.set(shape.groupId, nextId("group"));
+        }
+        groupId = groupIdMap.get(shape.groupId);
+      }
+      return {
+        ...shape,
+        id,
+        x: shape.x + PASTE_OFFSET,
+        y: shape.y + PASTE_OFFSET,
+        groupId,
+      } as CanvasShape;
+    });
+    setShapes((prev) => [...prev, ...pasted]);
+    clipboardRef.current = pasted;
+    setSelectedIds(newIds);
+    setActiveId(newIds.length === 1 ? newIds[0] : null);
+  }, [nextId, pushHistoryEntry, setSelectedIds]);
 
   // 鎖定選取物件成一組，並搬到相鄰位置
   const lockShapes = useCallback(
@@ -595,9 +752,13 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       addBrushStroke,
       updateShape,
       updateShapes,
+      alignShapes,
       reorderShapes,
       deleteShape,
       deleteShapes,
+      copyShapes,
+      cutShapes,
+      pasteShapes,
       resetCanvas,
       canvasWidth,
       canvasHeight,
@@ -647,9 +808,13 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       addBrushStroke,
       updateShape,
       updateShapes,
+      alignShapes,
       reorderShapes,
       deleteShape,
       deleteShapes,
+      copyShapes,
+      cutShapes,
+      pasteShapes,
       resetCanvas,
       canvasWidth,
       canvasHeight,

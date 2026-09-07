@@ -21,17 +21,34 @@ const MARQUEE_DRAG_THRESHOLD = 4;
 // 線段縮放後兩端點距離下限
 const MIN_LINE_LENGTH = MIN_SHAPE_SIZE;
 
-// 這幾種 shape 的 width/height 都綁死同一顆半徑，單選時必須鎖 keepRatio
-const UNIFORM_SCALE_CLASS_NAMES = new Set(["Text", "Circle", "RegularPolygon", "Star"]);
+// 這兩種天生強制等比縮放：Text 概念上仍靠 fontSize 縮放，Star 這次不開放拉伸（見 CLAUDE.md）。
+// Circle/RegularPolygon（圓形/三角形）改成看 shape 自己的 lockAspectRatio 欄位動態決定，不再寫死在這裡。
+const UNIFORM_SCALE_CLASS_NAMES = new Set(["Text", "Star"]);
 
-// 依選取節點設定 Transformer 的控點與 keepRatio
-function applyTransformerTarget(transformer: Konva.Transformer, nodes: Konva.Node[]) {
+// 旋轉控點圖示：沿用 @tabler/icons-react 的 IconRotate path data（outline 風格）
+// 顏色寫死成 Konva 預設 anchor 邊框色（rgb(0, 161, 255)），跟其餘控點視覺一致；
+// 不能用 currentColor，這裡是要轉成點陣圖的獨立 SVG，不在 CSS context 裡
+const ROTATE_ANCHOR_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgb(0, 161, 255)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.95 11a8 8 0 1 0 -.5 4m.5 5v-5h-5" /></svg>`;
+const ROTATE_ANCHOR_ICON_DATA_URI = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(ROTATE_ANCHOR_ICON_SVG)}`;
+// 旋轉控點的圖示尺寸（px），比預設 anchorSize（10）大一些，圖示線條才不會擠在一起
+const ROTATE_ANCHOR_ICON_SIZE = 20;
+
+// 依選取節點設定 Transformer 的控點與 keepRatio。
+// singleSelectedLockAspectRatio 只在「剛好選中 1 個」且該 shape 有自己的 lockAspectRatio 欄位
+// （rect/image/circle/triangle）時才有意義，由呼叫端算好傳入（見下方 singleSelectedLockAspectRatioRef）。
+function applyTransformerTarget(
+  transformer: Konva.Transformer,
+  nodes: Konva.Node[],
+  singleSelectedLockAspectRatio: boolean,
+) {
   transformer.nodes(nodes);
 
   // 畫筆筆畫底層也是 Line，靠 name="freehand"（見 KonvaBoard.tsx）排除，避免套用直線專用的兩端控點
   const isSingleStraightLine =
     nodes.length === 1 && nodes[0].getClassName() === "Line" && !nodes[0].hasName("freehand");
-  const keepRatio = nodes.length === 1 && UNIFORM_SCALE_CLASS_NAMES.has(nodes[0].getClassName());
+  const keepRatio =
+    nodes.length === 1 &&
+    (UNIFORM_SCALE_CLASS_NAMES.has(nodes[0].getClassName()) || singleSelectedLockAspectRatio);
   transformer.enabledAnchors(isSingleStraightLine ? LINE_ANCHORS : CORNER_ANCHORS);
   transformer.keepRatio(keepRatio);
 
@@ -52,6 +69,7 @@ interface UseShapeSelectionResult {
   handleDragMove: (id: string) => (e: KonvaEventObject<DragEvent>) => void;
   handleDragEnd: (id: string) => (e: KonvaEventObject<DragEvent>) => void;
   handleTransformEnd: (id: string) => (e: KonvaEventObject<Event>) => void; // 縮放/旋轉結束後寫回屬性
+  rotateAnchorStyleFunc: (anchor: Konva.Rect) => void; // 把旋轉控點的空白方塊換成 IconRotate 圖示
 }
 
 // 選取/拖曳/縮放/框選邏輯，selectedIds 讀寫 CanvasContext
@@ -70,6 +88,64 @@ export function useShapeSelection(): UseShapeSelectionResult {
     selectedIdsRef.current = selectedIds;
   }, [selectedIds]);
 
+  // 單選時，該 shape 自己的 lockAspectRatio（只有 rect/image/circle/triangle 有這個欄位）；
+  // 其餘情況（0 個/多選/沒有這個欄位的 type）一律當作 false，keepRatio 交給 UNIFORM_SCALE_CLASS_NAMES 判斷
+  const singleSelectedShape = selectedIds.length === 1 ? shapes.find((s) => s.id === selectedIds[0]) : undefined;
+  const singleSelectedLockAspectRatio =
+    singleSelectedShape?.type === "rect" ||
+    singleSelectedShape?.type === "image" ||
+    singleSelectedShape?.type === "circle" ||
+    singleSelectedShape?.type === "triangle"
+      ? singleSelectedShape.lockAspectRatio
+      : false;
+  // 給 registerShapeRef 的 callback（穩定身分、空依賴陣列）讀最新值用，避免 stale closure
+  const singleSelectedLockAspectRatioRef = useRef(singleSelectedLockAspectRatio);
+  useEffect(() => {
+    singleSelectedLockAspectRatioRef.current = singleSelectedLockAspectRatio;
+  }, [singleSelectedLockAspectRatio]);
+
+  // 旋轉控點圖示：載入完成前維持 Konva 預設空白方塊，載入完成後補一次 forceUpdate 讓已顯示的控點立即補上圖示
+  const rotateAnchorImageRef = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    const image = new window.Image();
+    image.onload = () => {
+      rotateAnchorImageRef.current = image;
+      transformerRef.current?.forceUpdate();
+    };
+    image.src = ROTATE_ANCHOR_ICON_DATA_URI;
+  }, []);
+
+  // Transformer.update() 最後一步會對每個 anchor（含 rotater）呼叫這個 func，
+  // 在這裡覆寫 rotater 的視覺內容不會被前面的統一設定蓋掉
+  const rotateAnchorStyleFunc = useCallback((anchor: Konva.Rect) => {
+    if (!anchor.hasName("rotater")) return;
+
+    // 比預設 anchorSize 大一點的正方形，圖示才看得清楚
+    anchor.width(ROTATE_ANCHOR_ICON_SIZE);
+    anchor.height(ROTATE_ANCHOR_ICON_SIZE);
+    anchor.offsetX(ROTATE_ANCHOR_ICON_SIZE / 2);
+    anchor.offsetY(ROTATE_ANCHOR_ICON_SIZE / 2);
+
+    // 明確蓋掉 Transformer.update() 前面統一套上的白底藍框方塊樣式，
+    // 這個 anchor 只顯示 IconRotate 圖示本身，不要任何方形背景/邊框
+    anchor.stroke("");
+    anchor.strokeWidth(0);
+    anchor.fill("transparent");
+
+    // 圖片還沒載入完成前（rotateAnchorImageRef.current 為 null）沒有 pattern 可畫，
+    // 加上前面已經把 fill 設成 transparent，這個控點會短暫完全不可見（無背景也無圖示）。
+    // 這是刻意接受的 trade-off：圖示是 inline SVG data URI（沒有網路請求），
+    // 載入幾乎是瞬間完成，這個過渡態影響極小，不特別加 loading placeholder。
+    const image = rotateAnchorImageRef.current;
+    if (!image) return;
+
+    anchor.fillPriority("pattern");
+    anchor.fillPatternImage(image);
+    anchor.fillPatternRepeat("no-repeat");
+    anchor.fillPatternScaleX(ROTATE_ANCHOR_ICON_SIZE / image.width);
+    anchor.fillPatternScaleY(ROTATE_ANCHOR_ICON_SIZE / image.height);
+  }, []);
+
   // 註冊 shape 對應的 Konva node
   const registerShapeRef = useCallback((id: string) => {
     const cached = shapeRefCallbacksRef.current.get(id);
@@ -83,7 +159,7 @@ export function useShapeSelection(): UseShapeSelectionResult {
           const nodes = selectedIdsRef.current
             .map((selectedShapeId) => shapeNodesRef.current.get(selectedShapeId))
             .filter((n): n is Konva.Node => n != null);
-          applyTransformerTarget(transformerRef.current, nodes);
+          applyTransformerTarget(transformerRef.current, nodes, singleSelectedLockAspectRatioRef.current);
         }
       } else {
         // node 為 null 代表這個 shape 被刪除
@@ -114,8 +190,8 @@ export function useShapeSelection(): UseShapeSelectionResult {
     const nodes = selectedIds
       .map((id) => shapeNodesRef.current.get(id))
       .filter((n): n is Konva.Node => n != null);
-    applyTransformerTarget(transformer, nodes);
-  }, [selectedIds]);
+    applyTransformerTarget(transformer, nodes, singleSelectedLockAspectRatio);
+  }, [selectedIds, singleSelectedLockAspectRatio]);
 
   // 點擊選取
   const handleSelect = useCallback(
@@ -288,8 +364,8 @@ export function useShapeSelection(): UseShapeSelectionResult {
         return;
       }
 
-      if (["Circle", "RegularPolygon", "Star"].includes(node.getClassName())) {
-        // 這三種只存一個 size（半徑 × 2）
+      if (node.getClassName() === "Star") {
+        // 星形這次不開放拉伸，只存一個 size（半徑 × 2），維持強制等比
         const newSize = Math.max(Math.round(node.width() * scaleX), MIN_SHAPE_SIZE);
         updateShape(id, {
           x: Math.round(node.x()),
@@ -327,7 +403,10 @@ export function useShapeSelection(): UseShapeSelectionResult {
         return;
       }
 
-      // 其餘（rect/image）：x/y/width/height 一律整數
+      // 其餘（rect/image/circle/triangle）：x/y/width/height 一律整數。
+      // circle/triangle 的 radius 在 KonvaBoard.tsx 固定成常數，靠 scaleX/scaleY 表現實際 width/height，
+      // 所以 node.width()/node.height() 讀到的都是同一顆固定半徑換算出的常數直徑，乘上 scale 後就是新尺寸，
+      // 跟 rect/image 完全同一套公式（見 CLAUDE.md 的 Circle/Triangle 拉伸實作說明）
       const width = Math.max(Math.round(node.width() * scaleX), MIN_SHAPE_SIZE);
       const height = Math.max(Math.round(node.height() * scaleY), MIN_SHAPE_SIZE);
       const patch: ShapePatch = {
@@ -364,5 +443,6 @@ export function useShapeSelection(): UseShapeSelectionResult {
     handleDragMove,
     handleDragEnd,
     handleTransformEnd,
+    rotateAnchorStyleFunc,
   };
 }

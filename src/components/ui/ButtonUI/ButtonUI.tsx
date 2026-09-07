@@ -16,11 +16,12 @@ interface ButtonUIProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "n
   width?: number | string;
   height?: number | string;
   selectedStyle?: ButtonSelectedStyle;
+  active?: boolean; // opt-in：套用既有靛藍 accent 的疊加樣式，代表「目前正處於某種模式中」
 }
 
 // 圖示+文字按鈕
 export const ButtonUI = forwardRef<HTMLButtonElement, ButtonUIProps>(function ButtonUI(
-  { name, icon, width, height, style, type = "button", selectedStyle = "origin", ...rest },
+  { name, icon, width, height, style, type = "button", selectedStyle = "origin", active, ...rest },
   ref,
 ) {
   const mergedStyle: CSSProperties = {
@@ -29,14 +30,12 @@ export const ButtonUI = forwardRef<HTMLButtonElement, ButtonUIProps>(function Bu
     ...style,
   };
 
+  const className = active
+    ? `${selectedStyleClassName[selectedStyle]} ${styles.active}`
+    : selectedStyleClassName[selectedStyle];
+
   return (
-    <button
-      ref={ref}
-      type={type}
-      className={selectedStyleClassName[selectedStyle]}
-      style={mergedStyle}
-      {...rest}
-    >
+    <button ref={ref} type={type} className={className} style={mergedStyle} aria-pressed={active} {...rest}>
       {icon && <span className={styles.icon}>{icon}</span>}
       <span className={styles.name}>{name}</span>
     </button>

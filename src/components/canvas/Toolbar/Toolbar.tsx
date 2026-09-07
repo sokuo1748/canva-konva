@@ -17,8 +17,17 @@ import { CanvasSizeInput } from "./CanvasSizeInput";
 import styles from "./Toolbar.module.scss";
 
 export function Toolbar() {
-  const { resetCanvas, undo, redo, canUndo, canRedo, selectedIds, shapes, lockShapes, unlockShapes } =
-    useCanvas();
+  const {
+    resetCanvas,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    selectedIds,
+    shapes,
+    lockShapes,
+    unlockShapes,
+  } = useCanvas();
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const closeExportModal = useCallback(() => setIsExportModalOpen(false), []);
 
