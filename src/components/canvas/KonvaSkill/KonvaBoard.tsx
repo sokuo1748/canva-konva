@@ -40,6 +40,7 @@ function buildLayerRuns(shapes: CanvasShape[]): LayerRun[] {
 export function KonvaBoard() {
   const {
     shapes,
+    pendingBrushStrokes,
     canvasWidth,
     canvasHeight,
     containerRef,
@@ -303,12 +304,35 @@ export function KonvaBoard() {
                 />
               );
             })}
-            {/* 最後一個區段是畫筆類型時，預覽線畫在這裡跟真正內容同一層 */}
-            {index === layerRuns.length - 1 && lastRunIsBrush && previewLine}
+            {/* 最後一個區段是畫筆類型、且目前是橡皮擦模式時，預覽線要畫在這裡跟被擦內容同一層，
+                destination-out 才能視覺上即時打洞；畫筆模式的預覽線改放下面的暫存筆畫層 */}
+            {activeTool === "eraser" && index === layerRuns.length - 1 && lastRunIsBrush && previewLine}
           </Layer>
         ))}
 
-        {/* UI 覆蓋層：永遠最上層，放框選提示/Transformer/畫筆預覽線，匯出前會暫時隱藏 */}
+        {/* 暫存畫筆筆畫層：這個 Paint session 已畫完、但還沒提交進 shapes 的筆畫（Paint 按鈕取消時
+            才會一次 flush 進 shapes，見 CanvasContext 的 flushPendingBrushStrokes）。純視覺、不可
+            選取/拖曳，永遠疊在所有已提交內容之上、Transformer/框選提示之下。 */}
+        <Layer listening={false}>
+          {pendingBrushStrokes.map((shape) => (
+            <Line
+              key={shape.id}
+              x={shape.x}
+              y={shape.y}
+              rotation={shape.rotation}
+              points={shape.points}
+              stroke={shape.stroke}
+              strokeWidth={shape.strokeWidth}
+              lineCap={shape.cap === "round" ? "round" : "square"}
+              lineJoin={shape.cap === "round" ? "round" : "miter"}
+              strokeScaleEnabled={false}
+            />
+          ))}
+          {/* 畫筆模式下進行中的預覽線跟暫存筆畫畫在同一層；橡皮擦模式的預覽線在上面 eraser 分支處理 */}
+          {activeTool === "brush" && previewLine}
+        </Layer>
+
+        {/* UI 覆蓋層：永遠最上層，放框選提示/Transformer，匯出前會暫時隱藏 */}
         <Layer ref={overlayLayerRef}>
           {marqueeRect && (
             <Rect
@@ -322,7 +346,7 @@ export function KonvaBoard() {
               listening={false}
             />
           )}
-          {!lastRunIsBrush && previewLine}
+          {activeTool === "eraser" && !lastRunIsBrush && previewLine}
           <Transformer ref={transformerRef} rotateEnabled anchorStyleFunc={rotateAnchorStyleFunc} />
         </Layer>
       </Stage>

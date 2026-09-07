@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import type Konva from "konva";
-import type { BrushCap, CanvasShape, CanvasSnapshot, ShapePatch } from "../types/shape";
+import type { BrushCap, BrushShape, CanvasShape, CanvasSnapshot, ShapePatch } from "../types/shape";
 import { toggleSelection } from "../utils/selection";
 import { eraseBrushStroke } from "../utils/eraseBrushStroke";
 import type { Point } from "../utils/eraseBrushStroke";
@@ -35,6 +35,7 @@ const DEFAULT_ERASER_SIZE = 20;
 
 interface CanvasContextValue {
   shapes: CanvasShape[]; // 畫布上所有物件
+  pendingBrushStrokes: BrushShape[]; // 這次 Paint session 已畫完但還沒提交進 shapes 的暫存筆畫，供 KonvaBoard 渲染
   addSquare: () => void; // 新增正方形
   addText: () => void; // 新增文字
   addImage: (src: string, naturalWidth: number, naturalHeight: number) => void; // 新增圖片
@@ -116,16 +117,9 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   const [brushSize, setBrushSize] = useState(DEFAULT_BRUSH_SIZE);
   const [brushCap, setBrushCap] = useState<BrushCap>(DEFAULT_BRUSH_CAP);
   const [eraserSize, setEraserSize] = useState(DEFAULT_ERASER_SIZE);
-
-  // 切到畫筆/橡皮擦模式時關閉選單並清空選取
-  const setActiveTool = useCallback((tool: "select" | "brush" | "eraser") => {
-    setActiveToolRaw(tool);
-    if (tool !== "select") {
-      setIsShapePickerOpen(false);
-      setSelectedIdsRaw([]);
-      setActiveId(null);
-    }
-  }, []);
+  // 這次 Paint session 已經畫完、但還沒提交進 shapes/undo history 的暫存筆畫緩衝區。
+  // 純 UI 暫態（跟 previewStroke/isShapePickerOpen 同類），不算進 undo history。
+  const [pendingBrushStrokes, setPendingBrushStrokes] = useState<BrushShape[]>([]);
 
   // undo/redo 歷史紀錄
   const [past, setPast] = useState<CanvasSnapshot[]>([]);
@@ -177,6 +171,33 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     setSelectedIds((prev) => prev.filter((id) => entry.shapes.some((s) => s.id === id)));
     setActiveId((prev) => (prev && entry.shapes.some((s) => s.id === prev) ? prev : null));
   }, [setSelectedIds]);
+
+  // 把這次 Paint session 累積的暫存筆畫一次提交成真正的 shapes，只推一筆 history entry
+  // （不管使用者這次畫了幾筆，切回 select 時都是一次性的提交動作）
+  const flushPendingBrushStrokes = useCallback(() => {
+    if (pendingBrushStrokes.length === 0) return; // 沒有暫存筆畫，不推無意義的 history
+    pushHistoryEntry();
+    setShapes((prev) => [...prev, ...pendingBrushStrokes]);
+    setPendingBrushStrokes([]);
+  }, [pendingBrushStrokes, pushHistoryEntry]);
+
+  // 切到畫筆/橡皮擦模式時關閉選單並清空選取；離開畫筆模式時先把暫存筆畫提交進 shapes
+  const setActiveTool = useCallback(
+    (tool: "select" | "brush" | "eraser") => {
+      // 離開畫筆模式（切回 select 或切到 eraser）都要先 flush：
+      // 橡皮擦的 eraseBrushStrokes 只處理 shapes 陣列裡已存在的 brush shape，
+      // 如果使用者畫完幾筆還沒切回 select 就直接點橡皮擦，那幾筆必須先變成真正的 shape 才擦得到，
+      // 不然橡皮擦會對著空氣擦。
+      if (activeTool === "brush" && tool !== "brush") flushPendingBrushStrokes();
+      setActiveToolRaw(tool);
+      if (tool !== "select") {
+        setIsShapePickerOpen(false);
+        setSelectedIdsRaw([]);
+        setActiveId(null);
+      }
+    },
+    [activeTool, flushPendingBrushStrokes],
+  );
 
   // 新增正方形
   const addSquare = useCallback(() => {
@@ -340,7 +361,9 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [canvasWidth, canvasHeight, nextId, pushHistoryEntry, setSelectedIds],
   );
 
-  // 提交一筆完整的畫筆軌跡，不自動選取（避免畫下一筆時被 Transformer 干擾）
+  // 畫完一筆先只存進 pendingBrushStrokes 暫存區，不立刻推 history/寫進 shapes；
+  // 要等 Paint 按鈕取消（切回 select，見 setActiveTool 裡的 flushPendingBrushStrokes）才一次提交。
+  // 不自動選取（避免畫下一筆時被 Transformer 干擾）
   const addBrushStroke = useCallback(
     (params: {
       x: number;
@@ -350,24 +373,21 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       strokeWidth: number;
       cap: BrushCap;
     }) => {
-      pushHistoryEntry();
       const id = nextId("brush");
-      setShapes((prev) => [
-        ...prev,
-        {
-          id,
-          type: "brush",
-          x: params.x,
-          y: params.y,
-          points: params.points,
-          stroke: params.stroke,
-          strokeWidth: params.strokeWidth,
-          cap: params.cap,
-          rotation: DEFAULT_ROTATION,
-        },
-      ]);
+      const newStroke: BrushShape = {
+        id,
+        type: "brush",
+        x: params.x,
+        y: params.y,
+        points: params.points,
+        stroke: params.stroke,
+        strokeWidth: params.strokeWidth,
+        cap: params.cap,
+        rotation: DEFAULT_ROTATION,
+      };
+      setPendingBrushStrokes((prev) => [...prev, newStroke]);
     },
-    [nextId, pushHistoryEntry],
+    [nextId],
   );
 
   // 橡皮擦：資料層級擦除，不產生任何持久化 shape，而是直接切割/裁切被擦到的既有畫筆筆畫
@@ -543,14 +563,17 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [shapes, pushHistoryEntry],
   );
 
-  // 清空畫布
+  // 清空畫布；順手清空還沒提交的暫存畫筆筆畫（這不算進 history，不需要額外推 entry）
   const resetCanvas = useCallback(() => {
-    if (shapes.length === 0) return; // 畫布已空就不做事
+    const hasPending = pendingBrushStrokes.length > 0;
+    if (shapes.length === 0 && !hasPending) return; // 畫布已空且沒有暫存筆畫，不做事
+    if (hasPending) setPendingBrushStrokes([]);
+    if (shapes.length === 0) return;
     pushHistoryEntry();
     setShapes([]);
     setSelectedIds([]);
     setActiveId(null);
-  }, [shapes, pushHistoryEntry, setSelectedIds]);
+  }, [shapes, pendingBrushStrokes, pushHistoryEntry, setSelectedIds]);
 
   // 調整畫布尺寸
   const setCanvasSize = useCallback(
@@ -563,7 +586,9 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [pushHistoryEntry],
   );
 
-  // 復原
+  // 復原（刻意行為：畫筆模式中途按 Undo/Redo 完全不會動到 pendingBrushStrokes——
+  // 暫存筆畫本來就不算進 history，繼續畫的過程中復原的只會是「已提交」的部分，
+  // 畫面上正在畫的筆跡不會被撤銷/重做影響，等之後切回 select 才會被一次 flush 疊上去）
   const undo = useCallback(() => {
     if (past.length === 0) return;
     const previousEntry = past[past.length - 1];
@@ -596,6 +621,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       shapes,
+      pendingBrushStrokes,
       addSquare,
       addText,
       addImage,
@@ -647,6 +673,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     // ref 物件 identity 不變，不用列進依賴陣列
     [
       shapes,
+      pendingBrushStrokes,
       addSquare,
       addText,
       addImage,

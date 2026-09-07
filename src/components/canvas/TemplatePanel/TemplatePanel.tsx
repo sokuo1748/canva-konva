@@ -66,9 +66,17 @@ export function TemplatePanel() {
                   setIsShapePickerOpen(!isShapePickerOpen);
                 }
               : item.id === "text"
-                ? addText
+                ? () => {
+                    // 畫筆模式下點 Text 一律先切回 select（連動 flush 暫存筆畫），
+                    // 跟 Shape 按鈕的處理方式保持一致，不然新文字會插進畫筆 session 還沒提交的畫面裡
+                    setActiveTool("select");
+                    addText();
+                  }
                 : item.id === "image"
-                  ? handleImageButtonClick
+                  ? () => {
+                      setActiveTool("select"); // 理由同 Text 按鈕
+                      handleImageButtonClick();
+                    }
                   : item.id === "paint"
                     ? () => {
                         setIsShapePickerOpen(false);
