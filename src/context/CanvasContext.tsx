@@ -32,6 +32,23 @@ const DEFAULT_BRUSH_COLOR = "#000000";
 const DEFAULT_BRUSH_SIZE = 8;
 const DEFAULT_BRUSH_CAP: BrushCap = "round";
 const DEFAULT_ERASER_SIZE = 20;
+// 貼上時跟原本位置的位移量，讓使用者能明顯區分新舊物件
+const PASTE_OFFSET = 20;
+
+// shape.type 對應到 nextId() 的 prefix（"rect" 沿用既有的 "shape" 前綴，不是巧合命名錯誤）
+const TYPE_TO_ID_PREFIX: Record<
+  CanvasShape["type"],
+  "shape" | "text" | "image" | "circle" | "triangle" | "star" | "line" | "brush"
+> = {
+  rect: "shape",
+  text: "text",
+  image: "image",
+  circle: "circle",
+  triangle: "triangle",
+  star: "star",
+  line: "line",
+  brush: "brush",
+};
 
 // 對齊模式（完整 3x3 方位）定義在 utils/align.ts（純函式，不依賴 Konva/React），這裡單純
 // re-export 給 Toolbar/panelRight 消費，維持既有「AlignMode 從 CanvasContext 匯出」的呼叫慣例
@@ -62,6 +79,9 @@ interface CanvasContextValue {
   reorderShapes: (orderedIds: string[]) => void; // 依圖層清單拖曳結果重新排序
   deleteShape: (id: string) => void; // 刪除單一物件
   deleteShapes: (ids: string[]) => void; // 批次刪除多個物件
+  copyShapes: (ids: string[]) => void; // 複製到 clipboard（純 UI 暫態，不進 history）
+  cutShapes: (ids: string[]) => void; // 複製後刪除
+  pasteShapes: () => void; // 貼上 clipboard 內容，產生新 id 並套用位移，只推一筆 history
   resetCanvas: () => void; // 清空畫布
   canvasWidth: number; // 畫布寬度
   canvasHeight: number; // 畫布高度
@@ -537,6 +557,65 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
 
   const deleteShape = useCallback((id: string) => deleteShapes([id]), [deleteShapes]); // 刪除單一物件
 
+  // clipboard 是純 UI 暫態（跟 isShapePickerOpen 同類），不進 CanvasSnapshot，用 ref 存即可不用觸發 re-render
+  const clipboardRef = useRef<CanvasShape[]>([]);
+
+  // 複製選取物件到 clipboard；ids 為空時保留原本 clipboard 內容不動
+  const copyShapes = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      const idSet = new Set(ids);
+      const matched = shapes.filter((shape) => idSet.has(shape.id));
+      if (matched.length === 0) return;
+      clipboardRef.current = matched;
+    },
+    [shapes],
+  );
+
+  // 剪下：複製後刪除（刪除走既有 deleteShapes，自動推一筆 history）
+  const cutShapes = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      copyShapes(ids);
+      deleteShapes(ids);
+    },
+    [copyShapes, deleteShapes],
+  );
+
+  // 貼上 clipboard 內容：新 id、位移 PASTE_OFFSET；原本有 groupId 的成員會重新產生一個新 groupId
+  // （同一批貼上的鎖定分組彼此還是同一組，但跟畫布上原本的分組脫鉤，不會誤併入原組），只推一筆 history。
+  // 貼上後把 clipboard 內容本身換成剛貼上的結果（新 id + 新位置 + 新 groupId），讓連續按 Ctrl+V 每次都再疊加
+  // PASTE_OFFSET、呈階梯狀散開，而不是每次都疊在同一個位置；copyShapes/cutShapes 會整包覆蓋
+  // clipboardRef，因此重新複製一律回到「未疊加位移」的狀態，不會延續上一次貼上殘留的偏移
+  const pasteShapes = useCallback(() => {
+    if (clipboardRef.current.length === 0) return;
+    pushHistoryEntry();
+    const newIds: string[] = [];
+    const groupIdMap = new Map<string, string>(); // 原 groupId -> 這批貼上專用的新 groupId
+    const pasted = clipboardRef.current.map((shape) => {
+      const id = nextId(TYPE_TO_ID_PREFIX[shape.type]);
+      newIds.push(id);
+      let groupId: string | undefined;
+      if (shape.groupId) {
+        if (!groupIdMap.has(shape.groupId)) {
+          groupIdMap.set(shape.groupId, nextId("group"));
+        }
+        groupId = groupIdMap.get(shape.groupId);
+      }
+      return {
+        ...shape,
+        id,
+        x: shape.x + PASTE_OFFSET,
+        y: shape.y + PASTE_OFFSET,
+        groupId,
+      } as CanvasShape;
+    });
+    setShapes((prev) => [...prev, ...pasted]);
+    clipboardRef.current = pasted;
+    setSelectedIds(newIds);
+    setActiveId(newIds.length === 1 ? newIds[0] : null);
+  }, [nextId, pushHistoryEntry, setSelectedIds]);
+
   // 鎖定選取物件成一組，並搬到相鄰位置
   const lockShapes = useCallback(
     (ids: string[]) => {
@@ -644,6 +723,9 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       reorderShapes,
       deleteShape,
       deleteShapes,
+      copyShapes,
+      cutShapes,
+      pasteShapes,
       resetCanvas,
       canvasWidth,
       canvasHeight,
@@ -695,6 +777,9 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       reorderShapes,
       deleteShape,
       deleteShapes,
+      copyShapes,
+      cutShapes,
+      pasteShapes,
       resetCanvas,
       canvasWidth,
       canvasHeight,
