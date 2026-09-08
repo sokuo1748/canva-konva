@@ -13,6 +13,7 @@ import { ButtonUI } from "../../ui/ButtonUI/ButtonUI";
 import { IconButtonUI } from "../../ui/IconButtonUI/IconButtonUI";
 import { InputUI } from "../../ui/InputUI/InputUI";
 import { useCanvas } from "../../../context/CanvasContext";
+import { isExactlyOneWholeGroup } from "../../../utils/groups";
 import { ExportModal } from "../ExportModal/ExportModal";
 import { CanvasSizeInput } from "./CanvasSizeInput";
 import styles from "./Toolbar.module.scss";
@@ -37,19 +38,8 @@ export function Toolbar() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const closeExportModal = useCallback(() => setIsExportModalOpen(false), []);
 
-  // 目前選取是否剛好是某個既有群組的全部成員
-  const isExactlyOneWholeGroup =
-    selectedIds.length >= 2 &&
-    (() => {
-      const groupId = shapes.find((shape) => shape.id === selectedIds[0])?.groupId;
-      if (!groupId) return false;
-      const allSelectedShareGroup = selectedIds.every(
-        (id) => shapes.find((shape) => shape.id === id)?.groupId === groupId,
-      );
-      if (!allSelectedShareGroup) return false;
-      const groupMemberCount = shapes.filter((shape) => shape.groupId === groupId).length;
-      return groupMemberCount === selectedIds.length;
-    })();
+  // 目前選取是否剛好是某個既有群組的全部成員（跟 alignShapes 共用同一份判斷邏輯，見 utils/groups.ts）
+  const isSelectedWholeGroup = isExactlyOneWholeGroup(shapes, selectedIds);
 
   return (
     <div className={styles.toolbar}>
@@ -69,7 +59,7 @@ export function Toolbar() {
           disabled={!canRedo}
         />
         {selectedIds.length >= 2 &&
-          (isExactlyOneWholeGroup ? (
+          (isSelectedWholeGroup ? (
             <IconButtonUI
               icon={<IconLockOpen size={20} />}
               label="解除圖層群組鎖定"

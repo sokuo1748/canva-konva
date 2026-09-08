@@ -8,6 +8,7 @@ import { toggleSelection } from "../utils/selection";
 import { MIN_CANVAS_SIZE, MAX_CANVAS_SIZE } from "../constants/shapeConstraints";
 import type { AlignMode } from "../utils/align";
 import { computeAlignDelta, getShapeLogicalRect, unionRects } from "../utils/align";
+import { clearOrphanGroupIds, isExactlyOneWholeGroup } from "../utils/groups";
 import { DEFAULT_FONT_FAMILY } from "../constants/fontFamilies";
 
 // 畫布尺寸初始值
@@ -105,6 +106,7 @@ interface CanvasContextValue {
   setActiveId: (id: string | null) => void; // 設定明確操作目標
   selectShape: (id: string, additive: boolean) => void; // 畫布點擊用的選取邏輯，點到鎖定分組會展開成整組
   selectShapeExact: (id: string, additive: boolean) => void; // 圖層清單點擊用，不展開成整組
+  selectShapesExact: (ids: string[], additive: boolean) => void; // 圖層清單 shift 範圍選取用，批次版本，不展開成整組
   lockShapes: (ids: string[]) => void; // 鎖定選取物件成一組
   unlockShapes: (ids: string[]) => void; // 解除鎖定
   isShapePickerOpen: boolean; // Shape 圖形選單是否開啟
@@ -485,13 +487,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         return getShapeLogicalRect(shape);
       };
 
-      // 目前 ids 是否剛好等於某個既有鎖定分組的全部成員（比照 Toolbar 判斷 Lock/Unlock icon 的邏輯）
-      const firstGroupId = shapes.find((s) => s.id === ids[0])?.groupId;
-      const isWholeGroup =
-        ids.length >= 2 &&
-        !!firstGroupId &&
-        ids.every((id) => shapes.find((s) => s.id === id)?.groupId === firstGroupId) &&
-        shapes.filter((s) => s.groupId === firstGroupId).length === ids.length;
+      // 目前 ids 是否剛好等於某個既有鎖定分組的全部成員（跟 Toolbar 判斷 Lock/Unlock icon 共用同一份邏輯）
+      const isWholeGroup = isExactlyOneWholeGroup(shapes, ids);
 
       const patches: { id: string; patch: ShapePatch }[] = [];
 
@@ -568,16 +565,22 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [shapes, selectedIds, setSelectedIds, activeTool, setActiveTool],
   );
 
-  // 圖層清單列點擊專用，不展開成整組
-  const selectShapeExact = useCallback(
-    (id: string, additive: boolean) => {
+  // 圖層清單點擊專用的批次版本（shift 範圍選取用），不展開成整組
+  const selectShapesExact = useCallback(
+    (ids: string[], additive: boolean) => {
       // 畫筆模式下先切回 select 模式
       if (activeTool !== "select") setActiveTool("select");
-      const nextIds = toggleSelection(selectedIds, [id], additive);
+      const nextIds = toggleSelection(selectedIds, ids, additive);
       setSelectedIds(nextIds);
       setActiveId(null);
     },
     [selectedIds, setSelectedIds, activeTool, setActiveTool],
+  );
+
+  // 圖層清單列點擊專用，不展開成整組
+  const selectShapeExact = useCallback(
+    (id: string, additive: boolean) => selectShapesExact([id], additive),
+    [selectShapesExact],
   );
 
   // 批次刪除物件（只推一筆 history）
@@ -586,7 +589,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       const idSet = new Set(ids);
       if (!shapes.some((shape) => idSet.has(shape.id))) return;
       pushHistoryEntry();
-      setShapes((prev) => prev.filter((shape) => !idSet.has(shape.id)));
+      // filter 完可能讓某些群組只剩 1 個成員，順手清掉這種孤兒 groupId（修過的 bug，見 CLAUDE.md）
+      setShapes((prev) => clearOrphanGroupIds(prev.filter((shape) => !idSet.has(shape.id))));
       setSelectedIds((prev) => prev.filter((id) => !idSet.has(id)));
       setActiveId((prev) => (prev && idSet.has(prev) ? null : prev));
     },
@@ -674,7 +678,13 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         const selected = prev
           .filter((shape) => idSet.has(shape.id))
           .map((shape) => ({ ...shape, groupId }) as CanvasShape);
-        return [...rest.slice(0, restBeforeCount), ...selected, ...rest.slice(restBeforeCount)];
+        // 選取物件裡如果有人原本屬於別的分組，剩下沒被選到的原分組成員可能會落單，
+        // 順手清掉這種孤兒 groupId（修過的 bug，見 CLAUDE.md）
+        return clearOrphanGroupIds([
+          ...rest.slice(0, restBeforeCount),
+          ...selected,
+          ...rest.slice(restBeforeCount),
+        ]);
       });
     },
     [shapes, pushHistoryEntry, nextId],
@@ -688,7 +698,10 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       setIsShapePickerOpen(false);
       pushHistoryEntry();
       setShapes((prev) =>
-        prev.map((shape) => (idSet.has(shape.id) ? ({ ...shape, groupId: undefined } as CanvasShape) : shape)),
+        // 只解鎖部分成員時，剩下沒被解鎖的成員可能會落單，順手清掉這種孤兒 groupId（修過的 bug，見 CLAUDE.md）
+        clearOrphanGroupIds(
+          prev.map((shape) => (idSet.has(shape.id) ? ({ ...shape, groupId: undefined } as CanvasShape) : shape)),
+        ),
       );
     },
     [shapes, pushHistoryEntry],
@@ -786,6 +799,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       setActiveId,
       selectShape,
       selectShapeExact,
+      selectShapesExact,
       lockShapes,
       unlockShapes,
       isShapePickerOpen,
@@ -844,6 +858,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       setActiveId,
       selectShape,
       selectShapeExact,
+      selectShapesExact,
       lockShapes,
       unlockShapes,
       isShapePickerOpen,
