@@ -41,7 +41,6 @@ export function KonvaBoard() {
     stageRef,
     overlayLayerRef,
     activeTool,
-    brushOpacity,
     brushSize,
     eraserSize,
   } = useCanvas();
@@ -137,9 +136,8 @@ export function KonvaBoard() {
     onTransformEnd: handleTransformEnd(id),
   });
 
-  // 草稿 session 的即時預覽內容（已完成的 strokes + 正在畫的這一筆）；全新 session 跟編輯
-  // 既有 shape 兩種情況都用目前的 brushOpacity（即時反映滑動透明度）——enterBrushEdit 進入
-  // 編輯模式時已經把 brushOpacity 同步成該 shape 原本的 opacity，見 useFreehandDraw.ts
+  // 草稿 session 的即時預覽內容（已完成的 strokes + 正在畫的這一筆）；opacity 是每一筆
+  // stroke 自己的屬性（跟 color/strokeWidth/cap 一致），不是整個 session/shape 共用一份
   const sessionPreview = session && (
     <>
       {session.strokes.map((stroke, index) => (
@@ -148,6 +146,7 @@ export function KonvaBoard() {
           points={stroke.points}
           stroke={stroke.color}
           strokeWidth={stroke.strokeWidth}
+          opacity={stroke.opacity / 100}
           {...brushStrokeLineProps(stroke.cap)}
         />
       ))}
@@ -156,6 +155,7 @@ export function KonvaBoard() {
           points={inProgressStroke.points}
           stroke={inProgressStroke.color}
           strokeWidth={inProgressStroke.strokeWidth}
+          opacity={inProgressStroke.opacity / 100}
           {...brushStrokeLineProps(inProgressStroke.cap)}
         />
       )}
@@ -215,7 +215,6 @@ export function KonvaBoard() {
                       x={session.x}
                       y={session.y}
                       rotation={session.rotation}
-                      opacity={brushOpacity / 100}
                       listening={false}
                     >
                       {sessionPreview}
@@ -231,7 +230,6 @@ export function KonvaBoard() {
                     x={shape.x}
                     y={shape.y}
                     rotation={shape.rotation}
-                    opacity={shape.opacity / 100}
                     onDblClick={activeTool === "select" ? () => enterBrushEdit(shape) : undefined}
                     {...commonHandlers}
                   >
@@ -241,6 +239,7 @@ export function KonvaBoard() {
                         points={stroke.points}
                         stroke={stroke.color}
                         strokeWidth={stroke.strokeWidth}
+                        opacity={stroke.opacity / 100}
                         {...brushStrokeLineProps(stroke.cap)}
                       />
                     ))}
@@ -396,7 +395,6 @@ export function KonvaBoard() {
               x={session.x}
               y={session.y}
               rotation={session.rotation}
-              opacity={brushOpacity / 100}
               listening={false}
             >
               {sessionPreview}

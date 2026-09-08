@@ -121,14 +121,15 @@ export type BrushCap = "round" | "square"; // 筆刷頭部形狀
 
 // 一筆完成的手繪路徑（一次 mousedown→mouseup），points 是相對所屬 BrushShape 的 x/y、
 // 且已經反向套用過該 shape 的 rotation 的本地座標（未旋轉座標系，Konva 畫完再由外層
-// Group 的 rotation 統一轉正，見 CLAUDE.md 畫筆/橡皮擦條目）。顏色/粗度/筆刷頭都存在
-// 每一筆自己身上而不是整個 BrushShape 共用一份——同一個繪畫 session 中途切換顏色/大小
-// 再畫下一筆是常見操作，若只在 shape 層級存一份會讓 session 中途改過的筆畫全部跑掉樣式
+// Group 的 rotation 統一轉正，見 CLAUDE.md 畫筆/橡皮擦條目）。顏色/粗度/筆刷頭/透明度都存在
+// 每一筆自己身上而不是整個 BrushShape 共用一份——同一個繪畫 session 中途切換顏色/大小/
+// 透明度再畫下一筆是常見操作，若只在 shape 層級存一份會讓 session 中途改過的筆畫全部跑掉樣式
 export interface BrushStroke {
   points: number[];
   color: string;
   strokeWidth: number;
   cap: BrushCap;
+  opacity: number; // 0~100 整數百分比，渲染到 Konva 時除以 100，畫下這一筆當下的滑桿值
 }
 
 // 畫筆自由路徑：一次「繪畫工作階段（session）」從開始到關閉工具期間畫的所有筆畫，
@@ -143,7 +144,6 @@ export interface BrushShape {
   y: number;
   strokes: BrushStroke[];
   rotation: number;
-  opacity: number; // 套用在整個 shape（Konva Group）上，不是每筆分別設定
   groupId?: string;
 }
 

@@ -77,7 +77,6 @@ interface CanvasContextValue {
     x: number;
     y: number;
     rotation: number;
-    opacity: number;
     strokes: BrushStroke[];
   }) => void;
   updateShape: (id: string, patch: ShapePatch) => void; // 更新單一物件屬性
@@ -412,7 +411,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   // 舊考量只適用於「每畫一筆就提交一次」的舊模型（此時使用者其實還在連續畫下一筆），
   // 這次改成整個 session 結束（使用者已經切回 select 工具）才提交一次，這個顧慮不再成立
   const addBrushShape = useCallback(
-    (params: { x: number; y: number; rotation: number; opacity: number; strokes: BrushStroke[] }) => {
+    (params: { x: number; y: number; rotation: number; strokes: BrushStroke[] }) => {
       if (params.strokes.length === 0) return;
       pushHistoryEntry();
       const id = nextId("brush");
@@ -425,7 +424,6 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
           y: params.y,
           strokes: params.strokes,
           rotation: params.rotation,
-          opacity: params.opacity,
         },
       ]);
       setSelectedIds([id]);
