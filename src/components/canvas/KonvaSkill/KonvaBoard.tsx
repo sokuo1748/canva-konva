@@ -137,8 +137,9 @@ export function KonvaBoard() {
     onTransformEnd: handleTransformEnd(id),
   });
 
-  // 草稿 session 的即時預覽內容（已完成的 strokes + 正在畫的這一筆），全新 session 用目前
-  // 的 brushOpacity（即時反映滑動透明度），編輯模式固定用原本 shape 的 opacity
+  // 草稿 session 的即時預覽內容（已完成的 strokes + 正在畫的這一筆）；全新 session 跟編輯
+  // 既有 shape 兩種情況都用目前的 brushOpacity（即時反映滑動透明度）——enterBrushEdit 進入
+  // 編輯模式時已經把 brushOpacity 同步成該 shape 原本的 opacity，見 useFreehandDraw.ts
   const sessionPreview = session && (
     <>
       {session.strokes.map((stroke, index) => (
@@ -214,7 +215,7 @@ export function KonvaBoard() {
                       x={session.x}
                       y={session.y}
                       rotation={session.rotation}
-                      opacity={shape.opacity / 100}
+                      opacity={brushOpacity / 100}
                       listening={false}
                     >
                       {sessionPreview}

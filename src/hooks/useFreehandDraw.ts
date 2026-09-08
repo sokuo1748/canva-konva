@@ -24,6 +24,7 @@ interface DraftSession {
   rotation: number;
   strokes: BrushStroke[]; // 已經收尾（mouseup）的筆畫
   originalStrokes: BrushStroke[] | null; // 編輯模式載入當下的快照，收尾時用來判斷有沒有真的改動
+  originalOpacity: number | null; // 編輯模式載入當下的 opacity 快照，收尾時一併判斷有沒有真的改動
 }
 
 interface UseFreehandDrawResult {
@@ -48,6 +49,7 @@ export function useFreehandDraw(): UseFreehandDrawResult {
     brushCap,
     eraserSize,
     brushOpacity,
+    setBrushOpacity,
     addBrushShape,
     updateShape,
     deleteShape,
@@ -101,8 +103,10 @@ export function useFreehandDraw(): UseFreehandDrawResult {
     setSession(null);
 
     if (current.editingId) {
-      const unchanged =
+      const strokesUnchanged =
         current.originalStrokes !== null && areStrokesEqual(current.originalStrokes, current.strokes);
+      const opacityUnchanged = current.originalOpacity !== null && current.originalOpacity === brushOpacity;
+      const unchanged = strokesUnchanged && opacityUnchanged;
       if (unchanged) {
         // 沒有真的改動，不推無意義的 history entry，但 enterBrushEdit 進入編輯模式時已經
         // 透過 setActiveTool("brush") 把 selectedIds 清空，這裡要跟「有改動」分支一樣
@@ -116,7 +120,7 @@ export function useFreehandDraw(): UseFreehandDrawResult {
         return;
       }
 
-      updateShape(current.editingId, { strokes: current.strokes });
+      updateShape(current.editingId, { strokes: current.strokes, opacity: brushOpacity });
       setSelectedIds([current.editingId]);
       setActiveId(current.editingId);
       return;
@@ -150,15 +154,21 @@ export function useFreehandDraw(): UseFreehandDrawResult {
         rotation: shape.rotation,
         strokes,
         originalStrokes: strokes,
+        originalOpacity: shape.opacity,
       };
       sessionRef.current = next;
       setSession(next);
       inProgressRef.current = null;
       setInProgressStroke(null);
 
+      // 把「目前畫筆設定」的 brushOpacity 同步成這個既有 shape 原本的透明度，讓面板上的
+      // 透明度滑桿反映正在編輯的這個 shape、且編輯中的即時預覽（KonvaBoard.tsx）能直接讀
+      // brushOpacity。這個 sticky 設定編輯結束後不會自動復原，是刻意行為（見 CLAUDE.md）
+      setBrushOpacity(shape.opacity);
+
       if (activeTool === "select") setActiveTool("brush");
     },
-    [commitSession, activeTool, setActiveTool],
+    [commitSession, activeTool, setActiveTool, setBrushOpacity],
   );
 
   // 工具切回 select 的那一刻才提交整個 session；切換 brush/eraser 兩個子工具彼此
@@ -189,7 +199,15 @@ export function useFreehandDraw(): UseFreehandDrawResult {
       if (rawPos.x < 0 || rawPos.x > canvasWidth || rawPos.y < 0 || rawPos.y > canvasHeight) return;
 
       const current: DraftSession =
-        sessionRef.current ?? { editingId: null, x: 0, y: 0, rotation: 0, strokes: [], originalStrokes: null };
+        sessionRef.current ?? {
+          editingId: null,
+          x: 0,
+          y: 0,
+          rotation: 0,
+          strokes: [],
+          originalStrokes: null,
+          originalOpacity: null,
+        };
 
       if (activeTool === "eraser") {
         isErasingRef.current = true;
