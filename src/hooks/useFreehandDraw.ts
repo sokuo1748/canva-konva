@@ -53,8 +53,10 @@ export function useFreehandDraw(): UseFreehandDrawResult {
     deleteShape,
     setSelectedIds,
     setActiveId,
+    shapes,
     canvasWidth,
     canvasHeight,
+    selectedIdsBeforeToolSwitchRef,
   } = useCanvas();
 
   const [session, setSession] = useState<DraftSession | null>(null);
@@ -132,19 +134,10 @@ export function useFreehandDraw(): UseFreehandDrawResult {
     });
   }, [finishStroke, deleteShape, updateShape, addBrushShape, brushOpacity, setSelectedIds, setActiveId]);
 
-  // 工具切回 select 的那一刻才提交整個 session；切換 brush/eraser 兩個子工具彼此
-  // 不會觸發提交（同一個 session 繼續累積），只有回到 select 才算「工具關閉」
-  const prevToolRef = useRef(activeTool);
-  useEffect(() => {
-    const prevTool = prevToolRef.current;
-    prevToolRef.current = activeTool;
-    if (prevTool !== "select" && activeTool === "select") {
-      commitSession();
-    }
-  }, [activeTool, commitSession]);
-
   // 雙擊已提交的 brush 圖層，把它的 strokes 讀回草稿狀態繼續編輯；只在 activeTool==="select"
-  // 時由 KonvaBoard 掛上這個 handler（見 KonvaBoard.tsx），避免雙擊事件跟畫圖手勢互相干擾
+  // 時由 KonvaBoard 掛上這個 handler（見 KonvaBoard.tsx），避免雙擊事件跟畫圖手勢互相干擾。
+  // 這個定義刻意放在下面「工具切換」的 effect 之前——effect 的依賴陣列會用到
+  // enterBrushEdit，宣告順序在 JS 裡必須先於使用它的地方（const 沒有函式那種 hoisting）
   const enterBrushEdit = useCallback(
     (shape: BrushShape) => {
       // 理論上呼叫這裡時不會有其他未提交的 session（見上面的限制），保險起見還是先收尾一次，
@@ -169,6 +162,42 @@ export function useFreehandDraw(): UseFreehandDrawResult {
     },
     [commitSession, activeTool, setActiveTool],
   );
+
+  // 工具切回 select 的那一刻才提交整個 session；切換 brush/eraser 兩個子工具彼此
+  // 不會觸發提交（同一個 session 繼續累積），只有回到 select 才算「工具關閉」。
+  // 反方向（select -> brush/eraser 的 rising edge）則是這次新增的續編輯邏輯：如果使用者
+  // 切工具前剛好單選了一個既有的 BrushShape（不管是畫布單擊還是 LayersPanel 點選），
+  // 直接接續編輯它，不要讓接下來畫的第一筆變成全新 session（修過的 bug，見 CLAUDE.md）。
+  // 「切工具前選了什麼」直接讀 CanvasContext 的 selectedIdsBeforeToolSwitchRef——
+  // setActiveTool 切到 brush/eraser 時本身就會清空 selectedIds，把「清空前的快照」記錄
+  // 下來的責任放在它自己身上，這裡不用再自己開一個額外 effect 去猜測 effect 宣告順序、
+  // 也不用假設「清空一定跟切換工具同一次呼叫發生」。
+  const prevToolRef = useRef(activeTool);
+  useEffect(() => {
+    const prevTool = prevToolRef.current;
+    prevToolRef.current = activeTool;
+
+    if (prevTool !== "select" && activeTool === "select") {
+      commitSession();
+      return;
+    }
+
+    if (prevTool === "select" && activeTool !== "select") {
+      const idsBeforeSwitch = selectedIdsBeforeToolSwitchRef.current;
+      if (idsBeforeSwitch.length !== 1) return; // 多選（例如展開的鎖定分組）刻意不處理，維持全新 session
+
+      const target = shapes.find((shape) => shape.id === idsBeforeSwitch[0]);
+      if (target?.type !== "brush") return;
+
+      // sessionRef.current?.editingId 已經等於 target.id 代表這是雙擊路徑（KonvaBoard.tsx
+      // 的 onDblClick）已經呼叫過一次 enterBrushEdit 並把 activeTool 改成 brush/eraser，
+      // 這個 effect 接著也會被觸發一次，這裡要跳過，避免同一個 shape 被重複呼叫、
+      // session 被不必要地重置
+      if (sessionRef.current?.editingId === target.id) return;
+
+      enterBrushEdit(target);
+    }
+  }, [activeTool, shapes, commitSession, enterBrushEdit, selectedIdsBeforeToolSwitchRef]);
 
   // 開始畫一筆（brush）或按下就先擦一次（eraser）
   const handleDrawMouseDown = useCallback(

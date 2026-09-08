@@ -126,6 +126,9 @@ interface CanvasContextValue {
   containerRef: RefObject<HTMLDivElement | null>; // 畫布容器 DOM ref
   stageRef: RefObject<Konva.Stage | null>; // Konva Stage 實例，供匯出使用
   overlayLayerRef: RefObject<Konva.Layer | null>; // 選取框/預覽線的 UI 覆蓋層，匯出時暫時隱藏
+  selectedIdsBeforeToolSwitchRef: RefObject<string[]>; // 切工具（select -> brush/eraser）清空
+  // selectedIds 前的快照，供 useFreehandDraw.ts 判斷「切工具前是否單選一個既有 brush 圖層」
+  // 直接續編輯用，見下方 setActiveTool 的說明
 }
 
 const CanvasContext = createContext<CanvasContextValue | null>(null);
@@ -155,15 +158,25 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   const [eraserSize, setEraserSize] = useState(DEFAULT_ERASER_SIZE);
   const [brushOpacity, setBrushOpacity] = useState(DEFAULT_BRUSH_OPACITY);
 
+  // 切工具（select -> brush/eraser）清空 selectedIds 前的快照，供 useFreehandDraw.ts 判斷
+  // 「切工具前是否剛好單選一個既有 brush 圖層」以便直接續編輯它。記錄的責任放在真正做清空
+  // 動作的 setActiveTool 自己身上（而不是讓下游 consumer hook 去猜測 effect 執行順序），
+  // 這裡只是單純 imperative 賦值、不觸發 re-render，所以用 ref 不用 state
+  const selectedIdsBeforeToolSwitchRef = useRef<string[]>([]);
+
   // 切到畫筆/橡皮擦模式時關閉選單並清空選取
-  const setActiveTool = useCallback((tool: "select" | "brush" | "eraser") => {
-    setActiveToolRaw(tool);
-    if (tool !== "select") {
-      setIsShapePickerOpen(false);
-      setSelectedIdsRaw([]);
-      setActiveId(null);
-    }
-  }, []);
+  const setActiveTool = useCallback(
+    (tool: "select" | "brush" | "eraser") => {
+      setActiveToolRaw(tool);
+      if (tool !== "select") {
+        selectedIdsBeforeToolSwitchRef.current = selectedIds;
+        setIsShapePickerOpen(false);
+        setSelectedIdsRaw([]);
+        setActiveId(null);
+      }
+    },
+    [selectedIds],
+  );
 
   // undo/redo 歷史紀錄
   const [past, setPast] = useState<CanvasSnapshot[]>([]);
@@ -801,6 +814,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       containerRef,
       stageRef,
       overlayLayerRef,
+      selectedIdsBeforeToolSwitchRef,
     }),
     // ref 物件 identity 不變，不用列進依賴陣列
     [

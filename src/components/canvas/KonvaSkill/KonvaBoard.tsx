@@ -42,6 +42,8 @@ export function KonvaBoard() {
     overlayLayerRef,
     activeTool,
     brushOpacity,
+    brushSize,
+    eraserSize,
   } = useCanvas();
   const {
     marqueeRect,
@@ -69,6 +71,10 @@ export function KonvaBoard() {
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+  // 畫筆/橡皮擦模式下，游標目前在畫布上的相對座標（跟 shape 同一個座標系），用來畫出
+  // 跟著滑鼠移動、大小反映目前筆刷/橡皮擦尺寸的範圍指示；null 代表滑鼠不在畫布上
+  // （剛切換工具、或滑鼠移出容器），這時不畫任何指示，維持既有的「沒資料就不畫」慣例
+  const [drawCursorPos, setDrawCursorPos] = useState<{ x: number; y: number } | null>(null);
 
   // 依容器尺寸即時計算畫布的 fit-scale 與置中位置
   useEffect(() => {
@@ -97,6 +103,28 @@ export function KonvaBoard() {
 
   // select 模式走選取/框選邏輯；brush/eraser 模式走自由繪圖邏輯，兩者互斥
   const isDrawMode = activeTool !== "select";
+
+  // 工具剛切成 brush/eraser 的那一刻（例如滑鼠靜止不動、從左側面板按鈕切換），主動讀一次
+  // 目前的指標位置補上游標圈初始值，不用等下一次 mousemove 事件才有東西可畫——容器 CSS
+  // 把原生 cursor 關掉了（見下方 Stage 的 cursor: "none"），這段空窗期完全看不到任何游標
+  // 會比原生 crosshair 明顯退步。跟 handleStageMouseMoveForCursor 用同一個
+  // getRelativePointerPosition()，維持同一個座標系；滑鼠當下不在 Stage 範圍內會回傳 null，
+  // 維持沒有游標圈的現狀即可，不用額外處理
+  useEffect(() => {
+    if (!isDrawMode) return;
+    const pos = stageRef.current?.getRelativePointerPosition();
+    setDrawCursorPos(pos ?? null);
+  }, [isDrawMode, stageRef]);
+
+  // 畫筆/橡皮擦模式下，滑鼠在 Stage 上移動時除了原本的畫圖取樣（handleDrawMouseMove），
+  // 順便更新遊標範圍指示的位置；跟 shape 用同一個 getRelativePointerPosition() 座標系，
+  // 不用額外處理 Stage 的 scaleX/scaleY（畫在同一層、同一個座標系裡自然正確）
+  const handleStageMouseMoveForCursor = (e: KonvaEventObject<MouseEvent>) => {
+    handleDrawMouseMove(e);
+    const stage = e.target.getStage();
+    const pos = stage?.getRelativePointerPosition();
+    setDrawCursorPos(pos ?? null);
+  };
 
   // 一般 shape 跟畫筆筆畫共用的事件組裝
   const buildCommonHandlers = (id: string) => ({
@@ -136,7 +164,10 @@ export function KonvaBoard() {
   return (
     <div
       ref={containerRef}
-      style={{ width: "100%", height: "100%", cursor: isDrawMode ? "crosshair" : undefined }}
+      // 畫筆/橡皮擦模式下隱藏原生游標（"none"），改用畫在 overlay layer 上、跟著滑鼠移動的
+      // 範圍指示圈當游標（見下方 Transformer 同一層的 Circle），比固定的 crosshair 更能
+      // 直覺反映目前筆刷/橡皮擦的實際大小
+      style={{ width: "100%", height: "100%", cursor: isDrawMode ? "none" : undefined }}
     >
       <Stage
         ref={stageRef}
@@ -147,8 +178,9 @@ export function KonvaBoard() {
         x={stagePos.x}
         y={stagePos.y}
         onMouseDown={isDrawMode ? handleDrawMouseDown : handleStageMouseDown}
-        onMouseMove={isDrawMode ? handleDrawMouseMove : handleStageMouseMove}
+        onMouseMove={isDrawMode ? handleStageMouseMoveForCursor : handleStageMouseMove}
         onMouseUp={isDrawMode ? handleDrawMouseUp : handleStageMouseUp}
+        onMouseLeave={isDrawMode ? () => setDrawCursorPos(null) : undefined}
       >
         {/* 背景層：永遠最底層，listening={false} 讓點擊穿透給 Stage 判斷「點到空白處」 */}
         <Layer>
@@ -386,6 +418,35 @@ export function KonvaBoard() {
             />
           )}
           <Transformer ref={transformerRef} rotateEnabled anchorStyleFunc={rotateAnchorStyleFunc} />
+          {/* 畫筆/橡皮擦模式下取代原生游標的範圍指示：跟著滑鼠移動，直徑＝目前的
+              brushSize/eraserSize。畫在跟筆畫同一個座標系、同一個被 Stage scaleX/scaleY
+              （fit-scale）縮放的層級內，半徑不用額外乘任何縮放係數就能正確反映實際塗抹範圍。
+              簡化成固定圓形（不管 brushCap 是圓形還是方形），足以當一個範圍提示；疊兩層
+              stroke（外層較粗的白色 + 內層較細的深色）做出在淺色/深色背景下都看得清楚的
+              描邊效果，strokeScaleEnabled=false 讓線條粗細不受縮放影響（比照專案其他
+              shape 的既有慣例） */}
+          {isDrawMode && drawCursorPos && (
+            <>
+              <Circle
+                x={drawCursorPos.x}
+                y={drawCursorPos.y}
+                radius={(activeTool === "eraser" ? eraserSize : brushSize) / 2}
+                stroke="#ffffff"
+                strokeWidth={3}
+                strokeScaleEnabled={false}
+                listening={false}
+              />
+              <Circle
+                x={drawCursorPos.x}
+                y={drawCursorPos.y}
+                radius={(activeTool === "eraser" ? eraserSize : brushSize) / 2}
+                stroke="#333333"
+                strokeWidth={1}
+                strokeScaleEnabled={false}
+                listening={false}
+              />
+            </>
+          )}
         </Layer>
       </Stage>
     </div>
