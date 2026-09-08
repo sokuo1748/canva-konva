@@ -117,22 +117,33 @@ export interface LineShape {
   groupId?: string;
 }
 
-export type BrushToolKind = "brush" | "eraser";
 export type BrushCap = "round" | "square"; // 筆刷頭部形狀
 
-// 畫筆/橡皮擦自由路徑，tool 為 eraser 時渲染會套用 destination-out 合成擦除
+// 一筆完成的手繪路徑（一次 mousedown→mouseup），points 是相對所屬 BrushShape 的 x/y、
+// 且已經反向套用過該 shape 的 rotation 的本地座標（未旋轉座標系，Konva 畫完再由外層
+// Group 的 rotation 統一轉正，見 CLAUDE.md 畫筆/橡皮擦條目）。顏色/粗度/筆刷頭都存在
+// 每一筆自己身上而不是整個 BrushShape 共用一份——同一個繪畫 session 中途切換顏色/大小
+// 再畫下一筆是常見操作，若只在 shape 層級存一份會讓 session 中途改過的筆畫全部跑掉樣式
+export interface BrushStroke {
+  points: number[];
+  color: string;
+  strokeWidth: number;
+  cap: BrushCap;
+}
+
+// 畫筆自由路徑：一次「繪畫工作階段（session）」從開始到關閉工具期間畫的所有筆畫，
+// 合併成的單一物件（Konva 端渲染成一個 Group，底下多個 Line，見 KonvaBoard.tsx），
+// 可以整體被選取/拖曳/縮放/旋轉。橡皮擦不再產生自己的 shape/tool 類型——橡皮擦是直接
+// 修改 session 草稿裡 strokes 的點資料（真的刪除點，必要時把一筆斷成兩筆），不使用
+// globalCompositeOperation: destination-out 疊加遮罩（見 CLAUDE.md 這輪的變更說明）
 export interface BrushShape {
   id: string;
   type: "brush";
   x: number;
   y: number;
-  points: number[];
-  stroke: string;
-  strokeWidth: number;
-  cap: BrushCap;
-  tool: BrushToolKind;
+  strokes: BrushStroke[];
   rotation: number;
-  opacity: number; // 橡皮擦目前固定 100，只有畫筆筆畫在 PaintPanel 可調（見 CanvasContext）
+  opacity: number; // 套用在整個 shape（Konva Group）上，不是每筆分別設定
   groupId?: string;
 }
 
@@ -167,7 +178,7 @@ export type ShapePatch = Partial<{
   strokeWidth: number;
   strokeEnabled: boolean;
   dash: number[];
-  cap: BrushCap;
+  strokes: BrushStroke[];
   bold: boolean;
   underline: boolean;
   strikethrough: boolean;

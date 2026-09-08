@@ -9,14 +9,7 @@ import {
 } from "@tabler/icons-react";
 import { useCanvas } from "../../../context/CanvasContext";
 import type { CanvasShape, ShapePatch } from "../../../types/shape";
-import {
-  MIN_SHAPE_SIZE,
-  MIN_FONT_SIZE,
-  MAX_BRUSH_SIZE,
-  MAX_ERASER_SIZE,
-  MIN_OPACITY,
-  MAX_OPACITY,
-} from "../../../constants/shapeConstraints";
+import { MIN_SHAPE_SIZE, MIN_FONT_SIZE, MIN_OPACITY, MAX_OPACITY } from "../../../constants/shapeConstraints";
 import { NumberField } from "../../ui/NumberField/NumberField";
 import { ColorField } from "../../ui/ColorField/ColorField";
 import { TextField } from "../../ui/TextField/TextField";
@@ -39,7 +32,8 @@ export function ShapePropertiesForm({ shape, alignIds }: ShapePropertiesFormProp
   const { updateShape } = useCanvas();
   const commit = (patch: ShapePatch) => updateShape(shape.id, patch);
 
-  // 所有 shape 類型都有 opacity（橡皮擦筆畫例外，見下方 brush 分支），欄位本身跟型別無關，共用同一份 JSX
+  // 所有 shape 類型都有 opacity，欄位本身跟型別無關，共用同一份 JSX（橡皮擦不再產生自己的
+  // shape，這個型別已經沒有「橡皮擦筆畫」這種例外，見 CLAUDE.md 畫筆/橡皮擦條目）
   const opacityField = (
     <NumberField
       label="opacity"
@@ -182,23 +176,11 @@ export function ShapePropertiesForm({ shape, alignIds }: ShapePropertiesFormProp
         </>
       )}
 
-      {/* 畫筆筆畫沒有 fill，橡皮擦沒有顏色；橡皮擦也不開放調整透明度（見 CLAUDE.md 這輪的變更說明） */}
-      {shape.type === "brush" && (
-        <>
-          {shape.tool === "brush" && (
-            <ColorField label="stroke" value={shape.stroke} onCommit={(v) => commit({ stroke: v })} />
-          )}
-          <NumberField
-            label="strokeWidth"
-            value={shape.strokeWidth}
-            min={1}
-            max={shape.tool === "eraser" ? MAX_ERASER_SIZE : MAX_BRUSH_SIZE}
-            round
-            onCommit={(v) => commit({ strokeWidth: v })}
-          />
-          {shape.tool === "brush" && opacityField}
-        </>
-      )}
+      {/* 畫筆筆畫（BrushShape）沒有 fill、也沒有單一的 stroke/strokeWidth——一個 shape 是一整個
+          繪畫 session 累積的多筆筆畫，顏色/粗度/筆刷頭都各自存在每一筆 stroke 身上（見
+          types/shape.ts 的 BrushStroke），沒有單一值可以在這裡編輯；要調整內容請雙擊圖層
+          重新進入編輯（見 CLAUDE.md 畫筆/橡皮擦條目），這裡只留下跟其他 shape 一致的 opacity */}
+      {shape.type === "brush" && opacityField}
 
       {shape.type === "rect" && (
         <NumberField

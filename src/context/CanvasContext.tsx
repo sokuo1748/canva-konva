@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import type Konva from "konva";
-import type { BrushCap, BrushToolKind, CanvasShape, CanvasSnapshot, ShapePatch } from "../types/shape";
+import type { BrushCap, BrushStroke, CanvasShape, CanvasSnapshot, ShapePatch } from "../types/shape";
 import { toggleSelection } from "../utils/selection";
 import { MIN_CANVAS_SIZE, MAX_CANVAS_SIZE } from "../constants/shapeConstraints";
 import type { AlignMode } from "../utils/align";
@@ -72,16 +72,13 @@ interface CanvasContextValue {
   addTriangle: () => void; // 新增三角形
   addStar: () => void; // 新增星形
   addLine: (dashed: boolean) => void; // 新增直線/虛線
-  addBrushStroke: (params: {
-    // 提交一筆完整的畫筆/橡皮擦軌跡
-    tool: BrushToolKind;
+  addBrushShape: (params: {
+    // 提交一整個繪畫 session 累積的所有筆畫，合併成一個新的 BrushShape
     x: number;
     y: number;
-    points: number[];
-    stroke: string;
-    strokeWidth: number;
-    cap: BrushCap;
+    rotation: number;
     opacity: number;
+    strokes: BrushStroke[];
   }) => void;
   updateShape: (id: string, patch: ShapePatch) => void; // 更新單一物件屬性
   updateShapes: (patches: { id: string; patch: ShapePatch }[]) => void; // 批次更新多個物件屬性
@@ -407,18 +404,14 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [canvasWidth, canvasHeight, nextId, pushHistoryEntry, setSelectedIds],
   );
 
-  // 提交一筆完整的畫筆/橡皮擦軌跡，不自動選取（避免畫下一筆時被 Transformer 干擾）
-  const addBrushStroke = useCallback(
-    (params: {
-      tool: BrushToolKind;
-      x: number;
-      y: number;
-      points: number[];
-      stroke: string;
-      strokeWidth: number;
-      cap: BrushCap;
-      opacity: number;
-    }) => {
+  // 提交一整個繪畫 session 累積的所有筆畫，合併成一個新的 BrushShape；只在 session 真的
+  // 畫出東西時由呼叫端（useFreehandDraw.ts）呼叫，這裡再擋一次空陣列純粹是保底。
+  // 跟其他 addXxx 一致自動選取剛建立的物件——先前「不自動選取避免被 Transformer 干擾」的
+  // 舊考量只適用於「每畫一筆就提交一次」的舊模型（此時使用者其實還在連續畫下一筆），
+  // 這次改成整個 session 結束（使用者已經切回 select 工具）才提交一次，這個顧慮不再成立
+  const addBrushShape = useCallback(
+    (params: { x: number; y: number; rotation: number; opacity: number; strokes: BrushStroke[] }) => {
+      if (params.strokes.length === 0) return;
       pushHistoryEntry();
       const id = nextId("brush");
       setShapes((prev) => [
@@ -428,17 +421,15 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
           type: "brush",
           x: params.x,
           y: params.y,
-          points: params.points,
-          stroke: params.stroke,
-          strokeWidth: params.strokeWidth,
-          cap: params.cap,
-          tool: params.tool,
+          strokes: params.strokes,
+          rotation: params.rotation,
           opacity: params.opacity,
-          rotation: DEFAULT_ROTATION,
         },
       ]);
+      setSelectedIds([id]);
+      setActiveId(id);
     },
-    [nextId, pushHistoryEntry],
+    [nextId, pushHistoryEntry, setSelectedIds],
   );
 
   // 更新單一物件屬性
@@ -763,7 +754,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       addTriangle,
       addStar,
       addLine,
-      addBrushStroke,
+      addBrushShape,
       updateShape,
       updateShapes,
       alignShapes,
@@ -821,7 +812,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       addTriangle,
       addStar,
       addLine,
-      addBrushStroke,
+      addBrushShape,
       updateShape,
       updateShapes,
       alignShapes,

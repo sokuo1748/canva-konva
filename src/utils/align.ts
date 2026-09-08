@@ -101,11 +101,23 @@ export function getShapeLogicalRect(shape: CanvasShape): Rect | null {
         width: shape.size,
         height: shape.size,
       };
-    case "line":
-    case "brush": {
+    case "line": {
       if (shape.points.length < 2) return null;
       const xs = shape.points.filter((_, index) => index % 2 === 0);
       const ys = shape.points.filter((_, index) => index % 2 === 1);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      return { x: shape.x + minX, y: shape.y + minY, width: maxX - minX, height: maxY - minY };
+    }
+    case "brush": {
+      // 合併所有筆畫的座標點一起算包圍盒（不考慮 rotation，跟其餘 fallback 分支一致，
+      // 見上方檔案註解）
+      const allPoints = shape.strokes.flatMap((stroke) => stroke.points);
+      if (allPoints.length < 2) return null;
+      const xs = allPoints.filter((_, index) => index % 2 === 0);
+      const ys = allPoints.filter((_, index) => index % 2 === 1);
       const minX = Math.min(...xs);
       const maxX = Math.max(...xs);
       const minY = Math.min(...ys);

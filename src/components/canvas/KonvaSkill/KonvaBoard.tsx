@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Circle, Layer, Line, Rect, RegularPolygon, Stage, Star, Text, Transformer } from "react-konva";
+import { Circle, Group, Layer, Line, Rect, RegularPolygon, Stage, Star, Text, Transformer } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { useCanvas } from "../../../context/CanvasContext";
 import { useShapeSelection } from "../../../hooks/useShapeSelection";
 import { useFreehandDraw } from "../../../hooks/useFreehandDraw";
-import type { CanvasShape } from "../../../types/shape";
-import { ERASER_STROKE_COLOR } from "../../../constants/shapeConstraints";
 import { DEFAULT_FONT_FAMILY } from "../../../constants/fontFamilies";
 import { URLImage } from "./URLImage";
 
@@ -24,24 +22,13 @@ const FIT_PADDING_RATIO = 0.9;
 // 數值跟 CanvasContext 的 SHAPE_DEFAULT_SIZE 一致，新增時 scaleX/scaleY 剛好都是 1。
 const SHAPE_BASE_RADIUS = 50;
 
-interface LayerRun {
-  shapes: CanvasShape[];
-  isBrush: boolean;
-}
-
-// 把 shapes[] 依是否為畫筆切成連續區段，每段各自渲染成一個獨立 Konva Layer，讓畫筆塗層能交錯排序
-function buildLayerRuns(shapes: CanvasShape[]): LayerRun[] {
-  const runs: LayerRun[] = [];
-  for (const shape of shapes) {
-    const isBrush = shape.type === "brush";
-    const last = runs[runs.length - 1];
-    if (last && last.isBrush === isBrush) {
-      last.shapes.push(shape);
-    } else {
-      runs.push({ shapes: [shape], isBrush });
-    }
-  }
-  return runs;
+// 畫筆 Group 底下的每一筆 stroke 共用的 Line 渲染屬性
+function brushStrokeLineProps(cap: "round" | "square") {
+  return {
+    lineCap: cap === "round" ? ("round" as const) : ("square" as const),
+    lineJoin: cap === "round" ? ("round" as const) : ("miter" as const),
+    strokeScaleEnabled: false,
+  };
 }
 
 export function KonvaBoard() {
@@ -54,10 +41,6 @@ export function KonvaBoard() {
     stageRef,
     overlayLayerRef,
     activeTool,
-    brushColor,
-    brushSize,
-    brushCap,
-    eraserSize,
     brushOpacity,
   } = useCanvas();
   const {
@@ -76,10 +59,12 @@ export function KonvaBoard() {
     rotateAnchorStyleFunc,
   } = useShapeSelection();
   const {
-    previewStroke,
+    session,
+    inProgressStroke,
     handleDrawMouseDown,
     handleDrawMouseMove,
     handleDrawMouseUp,
+    enterBrushEdit,
   } = useFreehandDraw();
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [scale, setScale] = useState(1);
@@ -124,24 +109,28 @@ export function KonvaBoard() {
     onTransformEnd: handleTransformEnd(id),
   });
 
-  const layerRuns = buildLayerRuns(shapes);
-  // 新筆畫會併入最後一個區段（如果它是畫筆類型），預覽線要畫在同一層，橡皮擦擦除效果才會即時可見
-  const lastRunIsBrush = layerRuns.length > 0 && layerRuns[layerRuns.length - 1].isBrush;
-
-  // 進行中、尚未提交的畫筆/橡皮擦預覽線
-  const previewLine = previewStroke && (
-    <Line
-      x={previewStroke.x}
-      y={previewStroke.y}
-      points={previewStroke.points}
-      stroke={activeTool === "eraser" ? ERASER_STROKE_COLOR : brushColor}
-      strokeWidth={activeTool === "eraser" ? eraserSize : brushSize}
-      lineCap={activeTool === "eraser" || brushCap === "round" ? "round" : "square"}
-      lineJoin={activeTool === "eraser" || brushCap === "round" ? "round" : "miter"}
-      globalCompositeOperation={activeTool === "eraser" ? "destination-out" : "source-over"}
-      opacity={activeTool === "eraser" ? 1 : brushOpacity / 100}
-      listening={false}
-    />
+  // 草稿 session 的即時預覽內容（已完成的 strokes + 正在畫的這一筆），全新 session 用目前
+  // 的 brushOpacity（即時反映滑動透明度），編輯模式固定用原本 shape 的 opacity
+  const sessionPreview = session && (
+    <>
+      {session.strokes.map((stroke, index) => (
+        <Line
+          key={`stroke-${index}`}
+          points={stroke.points}
+          stroke={stroke.color}
+          strokeWidth={stroke.strokeWidth}
+          {...brushStrokeLineProps(stroke.cap)}
+        />
+      ))}
+      {inProgressStroke && (
+        <Line
+          points={inProgressStroke.points}
+          stroke={inProgressStroke.color}
+          strokeWidth={inProgressStroke.strokeWidth}
+          {...brushStrokeLineProps(inProgressStroke.cap)}
+        />
+      )}
+    </>
   );
 
   return (
@@ -175,40 +164,54 @@ export function KonvaBoard() {
           />
         </Layer>
 
-        {/* 依陣列順序把一般 shape/畫筆筆畫的連續區段各自拆成一個 Layer，讓圖層排序能真實反映到畫面；
-            clip 到畫布範圍，物件拖出畫布外時超出的部分要被裁掉看不見（不是限制拖曳座標本身） */}
-        {layerRuns.map((run, index) => (
-          // key 用領頭 shape id，不是陣列 index，避免交錯排序時圖片被誤判成新節點而重新載入閃爍
-          <Layer
-            key={run.shapes[0].id}
-            clipX={0}
-            clipY={0}
-            clipWidth={canvasWidth}
-            clipHeight={canvasHeight}
-          >
-            {run.shapes.map((shape) => {
+        {/* 依陣列順序渲染所有 shape，clip 到畫布範圍，物件拖出畫布外時超出的部分要被裁掉看不見
+            （不是限制拖曳座標本身）。橡皮擦不再靠 destination-out 疊圖層遮罩（是直接修改草稿
+            資料的點，見 useFreehandDraw.ts），所以不需要再依是否為畫筆切成多個交錯的 Layer，
+            單一 Layer 就能正確反映圖層順序 */}
+        <Layer clipX={0} clipY={0} clipWidth={canvasWidth} clipHeight={canvasHeight}>
+          {shapes.map((shape) => {
               const commonHandlers = buildCommonHandlers(shape.id);
 
               if (shape.type === "brush") {
+                // 正在編輯這個 shape 時，改成渲染草稿 session 的即時內容（同一個位置，
+                // 維持原本的圖層順序），不渲染它已提交的靜態版本，避免兩份畫面同時出現
+                if (session?.editingId === shape.id) {
+                  return (
+                    <Group
+                      key={shape.id}
+                      x={session.x}
+                      y={session.y}
+                      rotation={session.rotation}
+                      opacity={shape.opacity / 100}
+                      listening={false}
+                    >
+                      {sessionPreview}
+                    </Group>
+                  );
+                }
+
                 return (
-                  <Line
+                  <Group
                     key={shape.id}
                     id={shape.id}
                     ref={registerShapeRef(shape.id)}
-                    name="freehand" // 跟一般直線區分控點樣式
                     x={shape.x}
                     y={shape.y}
                     rotation={shape.rotation}
-                    points={shape.points}
-                    stroke={shape.stroke}
-                    strokeWidth={shape.strokeWidth}
-                    lineCap={shape.cap === "round" ? "round" : "square"}
-                    lineJoin={shape.cap === "round" ? "round" : "miter"}
-                    globalCompositeOperation={shape.tool === "eraser" ? "destination-out" : "source-over"}
-                    strokeScaleEnabled={false}
                     opacity={shape.opacity / 100}
+                    onDblClick={activeTool === "select" ? () => enterBrushEdit(shape) : undefined}
                     {...commonHandlers}
-                  />
+                  >
+                    {shape.strokes.map((stroke, index) => (
+                      <Line
+                        key={index}
+                        points={stroke.points}
+                        stroke={stroke.color}
+                        strokeWidth={stroke.strokeWidth}
+                        {...brushStrokeLineProps(stroke.cap)}
+                      />
+                    ))}
+                  </Group>
                 );
               }
 
@@ -353,12 +356,22 @@ export function KonvaBoard() {
                 />
               );
             })}
-            {/* 最後一個區段是畫筆類型時，預覽線畫在這裡跟真正內容同一層 */}
-            {index === layerRuns.length - 1 && lastRunIsBrush && previewLine}
-          </Layer>
-        ))}
+          {/* 全新 session（不是編輯既有 shape）的即時預覽，附加在所有既有 shape 後面（最上層），
+              因為之後提交時也是 append 到 shapes 陣列最後面（最上層），z-order 保持一致 */}
+          {session && session.editingId === null && (
+            <Group
+              x={session.x}
+              y={session.y}
+              rotation={session.rotation}
+              opacity={brushOpacity / 100}
+              listening={false}
+            >
+              {sessionPreview}
+            </Group>
+          )}
+        </Layer>
 
-        {/* UI 覆蓋層：永遠最上層，放框選提示/Transformer/畫筆預覽線，匯出前會暫時隱藏 */}
+        {/* UI 覆蓋層：永遠最上層，放框選提示/Transformer，匯出前會暫時隱藏 */}
         <Layer ref={overlayLayerRef}>
           {marqueeRect && (
             <Rect
@@ -372,7 +385,6 @@ export function KonvaBoard() {
               listening={false}
             />
           )}
-          {!lastRunIsBrush && previewLine}
           <Transformer ref={transformerRef} rotateEnabled anchorStyleFunc={rotateAnchorStyleFunc} />
         </Layer>
       </Stage>
