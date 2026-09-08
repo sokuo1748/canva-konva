@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useState } from "react";
 import {
   DndContext,
@@ -77,6 +77,15 @@ function LayerRow({ shape, onSelect, rootRef, rootStyle, dragAttributes, dragLis
   const Icon = shape.type === "brush" && shape.tool === "eraser" ? IconEraser : SHAPE_TYPE_ICONS[shape.type];
   const isSelected = selectedIds.includes(shape.id);
 
+  // 按住 shift/ctrl/cmd 時完全不啟動 dnd-kit 的拖曳偵測（PointerSensor 的啟動判斷本身不排除
+  // 修飾鍵，只要 pointerdown 後移動超過 ROW_DRAG_ACTIVATION_DISTANCE 就會誤判成拖曳排序），
+  // 讓 modifier+click 永遠只會被當成單純點擊，交給 onClick 處理選取——修過的 bug：原本按住
+  // shift 點擊只要手滑動一點就會把整列拖走，onClick 完全不會觸發
+  const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.shiftKey || e.ctrlKey || e.metaKey) return;
+    dragListeners?.onPointerDown?.(e);
+  };
+
   return (
     <div
       ref={rootRef}
@@ -85,6 +94,7 @@ function LayerRow({ shape, onSelect, rootRef, rootStyle, dragAttributes, dragLis
       onClick={(e) => onSelect(shape.id, e)}
       {...dragAttributes}
       {...dragListeners}
+      onPointerDown={handlePointerDown}
     >
       <Icon size={16} className={styles.rowIcon} />
       <span className={styles.rowLabel}>{shape.id}</span>
@@ -130,6 +140,14 @@ function SortableBracket({
     id: groupId,
   });
   const displayShapes = [...shapes].reverse(); // 分組內部也套用「第一筆＝最上層」
+
+  // 同樣的守衛，理由跟 LayerRow 一致：分組成員列的 pointerdown 會透過事件冒泡傳到這個
+  // .bracket div，按住修飾鍵時不能被誤判成「拖曳整組」
+  const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.shiftKey || e.ctrlKey || e.metaKey) return;
+    listeners?.onPointerDown?.(e);
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -137,6 +155,7 @@ function SortableBracket({
       className={`${styles.bracket} ${isDragging ? styles.dragging : ""}`}
       {...attributes}
       {...listeners}
+      onPointerDown={handlePointerDown}
     >
       {displayShapes.map((shape) => (
         <LayerRow key={shape.id} shape={shape} onSelect={onSelect} />
