@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import type Konva from "konva";
 import type { BrushCap, BrushToolKind, CanvasShape, CanvasSnapshot, ShapePatch } from "../types/shape";
@@ -757,14 +757,12 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   const canUndo = past.length > 0;
   const canRedo = future.length > 0;
 
-  // 給 getSnapshot() 用的唯讀鏡像
-  const snapshotRef = useRef<string>("");
-
-  useEffect(() => {
-    snapshotRef.current = JSON.stringify({ shapes, canvasWidth, canvasHeight, canvasBackgroundColor });
-  }, [shapes, canvasWidth, canvasHeight, canvasBackgroundColor]);
-
-  const getSnapshot = useCallback(() => snapshotRef.current, []); // 取得目前畫布資料的 JSON 快照
+  // 給未來 Export 功能用的唯讀快照，目前沒有任何呼叫端在用——lazy 產生，
+  // 不要常態用 useEffect 每次 shapes 變動就序列化一次（shapes 可能含大型 base64 圖片）
+  const getSnapshot = useCallback(
+    () => JSON.stringify({ shapes, canvasWidth, canvasHeight, canvasBackgroundColor }),
+    [shapes, canvasWidth, canvasHeight, canvasBackgroundColor],
+  );
 
   const value = useMemo(
     () => ({

@@ -11,6 +11,11 @@ export const MAX_ERASER_SIZE = 150;
 // 橡皮擦筆畫顏色，視覺上不重要（destination-out 合成看不到顏色）
 export const ERASER_STROKE_COLOR = "#000000";
 
+// 單筆畫筆/橡皮擦軌跡的取樣點數上限（每個點佔陣列兩格 x/y），避免按住不放畫很久
+// 導致 points 陣列無限成長；正常使用幾乎不可能碰到，達到上限後單純不再取樣新點，
+// 不會自動 commit 或分割成多筆
+export const MAX_BRUSH_POINTS = 4000;
+
 // 畫布尺寸上下限
 export const MIN_CANVAS_SIZE = 100;
 export const MAX_CANVAS_SIZE = 4000;

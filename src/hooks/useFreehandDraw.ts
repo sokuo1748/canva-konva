@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { useCanvas } from "../context/CanvasContext";
 import type { BrushCap } from "../types/shape";
-import { ERASER_STROKE_COLOR } from "../constants/shapeConstraints";
+import { ERASER_STROKE_COLOR, MAX_BRUSH_POINTS } from "../constants/shapeConstraints";
 
 // 兩點間距離小於這個值就跳過，避免長筆畫產生過多點
 const MIN_POINT_DISTANCE = 2;
@@ -101,6 +101,10 @@ export function useFreehandDraw(): UseFreehandDrawResult {
       const localX = clampedX - stroke.x;
       const localY = clampedY - stroke.y;
       const { points } = stroke;
+
+      // 達到取樣點數上限就不再延伸，維持目前最後位置、忽略後續 mousemove
+      if (points.length >= MAX_BRUSH_POINTS * 2) return;
+
       const lastX = points[points.length - 2];
       const lastY = points[points.length - 1];
       if (Math.hypot(localX - lastX, localY - lastY) < MIN_POINT_DISTANCE) return;
