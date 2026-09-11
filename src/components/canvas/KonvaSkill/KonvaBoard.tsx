@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Circle, Layer, Line, Rect, RegularPolygon, Stage, Star, Text, Transformer } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { useCanvas } from "../../../context/CanvasContext";
+import { usePaintSettings } from "../../../context/PaintSettingsContext";
 import { useShapeSelection } from "../../../hooks/useShapeSelection";
 import { useFreehandDraw } from "../../../hooks/useFreehandDraw";
 import type { CanvasShape } from "../../../types/shape";
@@ -54,12 +55,8 @@ export function KonvaBoard() {
     stageRef,
     overlayLayerRef,
     activeTool,
-    brushColor,
-    brushSize,
-    brushCap,
-    eraserSize,
-    brushOpacity,
   } = useCanvas();
+  const { brushColor, brushSize, brushCap, eraserSize, brushOpacity } = usePaintSettings();
   const {
     marqueeRect,
     transformerRef,

@@ -34,14 +34,8 @@ const SHAPE_DEFAULT_STROKE_WIDTH = 5;
 const SHAPE_DEFAULT_STROKE_ENABLED = false;
 // 虛線的預設 dash pattern
 const LINE_DASH_PATTERN = [12, 8];
-// 畫筆/橡皮擦工具參數預設值
-const DEFAULT_BRUSH_COLOR = "#000000";
-const DEFAULT_BRUSH_SIZE = 8;
-const DEFAULT_BRUSH_CAP: BrushCap = "round";
-const DEFAULT_ERASER_SIZE = 20;
 // 一般 shape 新增時預設不透明；橡皮擦筆畫固定不透明（destination-out 擦除不開放調整）
 const DEFAULT_OPACITY = 100;
-const DEFAULT_BRUSH_OPACITY = 100;
 // 貼上時跟原本位置的位移量，讓使用者能明顯區分新舊物件
 const PASTE_OFFSET = 20;
 
@@ -113,16 +107,6 @@ interface CanvasContextValue {
   setIsShapePickerOpen: (open: boolean) => void; // 開關 Shape 圖形選單
   activeTool: "select" | "brush" | "eraser"; // 目前作用中的工具
   setActiveTool: (tool: "select" | "brush" | "eraser") => void; // 切換工具
-  brushColor: string; // 畫筆顏色
-  setBrushColor: (color: string) => void; // 設定畫筆顏色
-  brushSize: number; // 畫筆大小
-  setBrushSize: (size: number) => void; // 設定畫筆大小
-  brushCap: BrushCap; // 畫筆筆刷形狀
-  setBrushCap: (cap: BrushCap) => void; // 設定筆刷形狀
-  eraserSize: number; // 橡皮擦大小
-  setEraserSize: (size: number) => void; // 設定橡皮擦大小
-  brushOpacity: number; // 畫筆透明度（0~100），橡皮擦不開放調整
-  setBrushOpacity: (opacity: number) => void; // 設定畫筆透明度
   undo: () => void; // 復原
   redo: () => void; // 取消復原
   canUndo: boolean; // 是否可復原
@@ -154,11 +138,6 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   const overlayLayerRef = useRef<Konva.Layer>(null);
 
   const [activeTool, setActiveToolRaw] = useState<"select" | "brush" | "eraser">("select");
-  const [brushColor, setBrushColor] = useState(DEFAULT_BRUSH_COLOR);
-  const [brushSize, setBrushSize] = useState(DEFAULT_BRUSH_SIZE);
-  const [brushCap, setBrushCap] = useState<BrushCap>(DEFAULT_BRUSH_CAP);
-  const [eraserSize, setEraserSize] = useState(DEFAULT_ERASER_SIZE);
-  const [brushOpacity, setBrushOpacity] = useState(DEFAULT_BRUSH_OPACITY);
 
   // 切到畫筆/橡皮擦模式時關閉選單並清空選取
   const setActiveTool = useCallback((tool: "select" | "brush" | "eraser") => {
@@ -804,16 +783,6 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       setIsShapePickerOpen,
       activeTool,
       setActiveTool,
-      brushColor,
-      setBrushColor,
-      brushSize,
-      setBrushSize,
-      brushCap,
-      setBrushCap,
-      eraserSize,
-      setEraserSize,
-      brushOpacity,
-      setBrushOpacity,
       undo,
       redo,
       canUndo,
@@ -863,16 +832,6 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       setIsShapePickerOpen,
       activeTool,
       setActiveTool,
-      brushColor,
-      setBrushColor,
-      brushSize,
-      setBrushSize,
-      brushCap,
-      setBrushCap,
-      eraserSize,
-      setEraserSize,
-      brushOpacity,
-      setBrushOpacity,
       undo,
       redo,
       canUndo,

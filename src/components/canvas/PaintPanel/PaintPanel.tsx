@@ -2,6 +2,7 @@
 
 import { IconBrush, IconCircle, IconEraser, IconSquare } from "@tabler/icons-react";
 import { useCanvas } from "../../../context/CanvasContext";
+import { usePaintSettings } from "../../../context/PaintSettingsContext";
 import {
   MAX_BRUSH_SIZE,
   MAX_ERASER_SIZE,
@@ -17,9 +18,8 @@ import styles from "./PaintPanel.module.scss";
 
 // 畫筆/橡皮擦工具設定面板
 export function PaintPanel() {
+  const { activeTool, setActiveTool } = useCanvas();
   const {
-    activeTool,
-    setActiveTool,
     brushColor,
     setBrushColor,
     brushSize,
@@ -30,7 +30,7 @@ export function PaintPanel() {
     setEraserSize,
     brushOpacity,
     setBrushOpacity,
-  } = useCanvas();
+  } = usePaintSettings();
 
   return (
     <div className={styles.panel}>
