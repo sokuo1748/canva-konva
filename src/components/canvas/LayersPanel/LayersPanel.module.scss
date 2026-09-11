@@ -9,6 +9,10 @@
   // 把下面固定高度的 Image/Shape/Text 按鈕擠出畫面，而不是自己內部捲動。
   min-height: 0;
   overflow-y: auto;
+  // shift 拖曳框選（見 LayersPanel.tsx 的 handlePanelPointerDown/Move/Up）借用的手勢跟瀏覽器
+  // 原生「延伸文字選取範圍」的預設行為長得一樣，沒擋掉的話拖曳時畫面上會同時出現藍色文字選取
+  // 高亮，跟我們自己畫的選取外框（.rowSelected）混在一起，視覺上很亂。
+  user-select: none;
 }
 
 // .row/.bracket 現在也是 dnd-kit useSortable 的 ref 目標，都加 touch-action: none——

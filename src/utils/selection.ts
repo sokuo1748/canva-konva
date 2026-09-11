@@ -13,3 +13,13 @@ export function toggleSelection(currentIds: string[], ids: string[], additive: b
 export function isAdditiveClick(evt: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }): boolean {
   return evt.shiftKey || evt.ctrlKey || evt.metaKey;
 }
+
+// 依「畫面顯示順序」的 id 陣列，算出 anchor 到 target 之間（含頭尾）的所有 id；
+// 任一端不在 orderedIds 裡（例如 anchor 對應的 shape 已被刪除）就退化成只選 target 自己
+export function getRangeIds(orderedIds: string[], anchorId: string, targetId: string): string[] {
+  const anchorIndex = orderedIds.indexOf(anchorId);
+  const targetIndex = orderedIds.indexOf(targetId);
+  if (anchorIndex === -1 || targetIndex === -1) return [targetId];
+  const [start, end] = anchorIndex < targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
+  return orderedIds.slice(start, end + 1);
+}
