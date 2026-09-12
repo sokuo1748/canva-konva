@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { useCanvas } from "../context/CanvasContext";
+import { usePaintSettings } from "../context/PaintSettingsContext";
 import type { BrushShape, BrushStroke } from "../types/shape";
 import {
   areStrokesEqual,
@@ -10,6 +11,7 @@ import {
   eraseStrokesAtPoint,
   toSessionLocalPoint,
 } from "../utils/brush";
+import { MAX_BRUSH_POINTS } from "../constants/shapeConstraints";
 
 // 兩點間距離小於這個值就跳過，避免長筆畫產生過多點
 const MIN_POINT_DISTANCE = 2;
@@ -43,11 +45,6 @@ export function useFreehandDraw(): UseFreehandDrawResult {
   const {
     activeTool,
     setActiveTool,
-    brushColor,
-    brushSize,
-    brushCap,
-    eraserSize,
-    brushOpacity,
     addBrushShape,
     updateShape,
     deleteShape,
@@ -56,6 +53,7 @@ export function useFreehandDraw(): UseFreehandDrawResult {
     canvasWidth,
     canvasHeight,
   } = useCanvas();
+  const { brushColor, brushSize, brushCap, eraserSize, brushOpacity } = usePaintSettings();
 
   const [session, setSession] = useState<DraftSession | null>(null);
   const sessionRef = useRef<DraftSession | null>(null);
@@ -269,6 +267,10 @@ export function useFreehandDraw(): UseFreehandDrawResult {
 
       const local = toSessionLocalPoint(clamped, current, current.rotation);
       const { points } = stroke;
+
+      // 達到取樣點數上限就不再延伸，維持目前最後位置、忽略後續 mousemove
+      if (points.length >= MAX_BRUSH_POINTS * 2) return;
+
       const lastX = points[points.length - 2];
       const lastY = points[points.length - 1];
       if (Math.hypot(local.x - lastX, local.y - lastY) < MIN_POINT_DISTANCE) return;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   IconArrowBackUp,
   IconArrowForwardUp,
@@ -37,6 +37,38 @@ export function Toolbar() {
   } = useCanvas();
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const closeExportModal = useCallback(() => setIsExportModalOpen(false), []);
+
+  // 畫布背景色：跟 ColorField 同樣的手法，拖曳選色期間（原生 input 事件）只更新本地
+  // 顯示值，放開滑鼠/選色完成（原生 change 事件）才真正呼叫 setCanvasBackgroundColor，
+  // 避免灌爆 undo history（見 CLAUDE.md）
+  const [bgColorDisplayValue, setBgColorDisplayValue] = useState(canvasBackgroundColor);
+  const bgColorInputRef = useRef<HTMLInputElement>(null);
+  const setCanvasBackgroundColorRef = useRef(setCanvasBackgroundColor);
+
+  useEffect(() => {
+    setCanvasBackgroundColorRef.current = setCanvasBackgroundColor;
+  });
+
+  // render 期間比較上一次 value、不同就順便 setState（React 官方認可的
+  // derive-from-props 手法），不透過 useEffect（見 ColorField.tsx 同樣的做法）
+  const [prevBgColor, setPrevBgColor] = useState(canvasBackgroundColor);
+  if (canvasBackgroundColor !== prevBgColor) {
+    setPrevBgColor(canvasBackgroundColor);
+    setBgColorDisplayValue(canvasBackgroundColor);
+  }
+
+  useEffect(() => {
+    const input = bgColorInputRef.current;
+    if (!input) return;
+
+    const handleNativeChange = (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      setCanvasBackgroundColorRef.current(target.value);
+    };
+
+    input.addEventListener("change", handleNativeChange);
+    return () => input.removeEventListener("change", handleNativeChange);
+  }, []);
 
   // 目前選取是否剛好是某個既有群組的全部成員（跟 alignShapes 共用同一份判斷邏輯，見 utils/groups.ts）
   const isSelectedWholeGroup = isExactlyOneWholeGroup(shapes, selectedIds);
@@ -76,9 +108,10 @@ export function Toolbar() {
       <div className={styles.group}>
         <CanvasSizeInput />
         <InputUI
+          ref={bgColorInputRef}
           type="color"
-          value={canvasBackgroundColor}
-          onChange={(e) => setCanvasBackgroundColor(e.target.value)}
+          value={bgColorDisplayValue}
+          onChange={(e) => setBgColorDisplayValue(e.target.value)}
           width={32}
           height={32}
           style={BG_COLOR_SWATCH_STYLE}
