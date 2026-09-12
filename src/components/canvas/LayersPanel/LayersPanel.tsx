@@ -12,7 +12,6 @@ import {
 import type { DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { IconEraser } from "@tabler/icons-react";
 import { SHAPE_TYPE_ICONS } from "../../../constants/shapeTypeIcons";
 import { useCanvas } from "../../../context/CanvasContext";
 import { getRangeIds, isAdditiveClick } from "../../../utils/selection";
@@ -73,8 +72,8 @@ interface LayerRowProps {
 // 單一圖層列
 function LayerRow({ shape, onSelect, rootRef, rootStyle, dragAttributes, dragListeners, isDragging }: LayerRowProps) {
   const { selectedIds } = useCanvas();
-  // 橡皮擦筆畫換成 IconEraser 方便區分
-  const Icon = shape.type === "brush" && shape.tool === "eraser" ? IconEraser : SHAPE_TYPE_ICONS[shape.type];
+  // 橡皮擦不再產生自己的 shape/tool（見 CLAUDE.md 畫筆/橡皮擦條目），brush 一律用同一個 icon
+  const Icon = SHAPE_TYPE_ICONS[shape.type];
   const isSelected = selectedIds.includes(shape.id);
 
   // 按住 shift/ctrl/cmd 時完全不啟動 dnd-kit 的拖曳偵測（PointerSensor 的啟動判斷本身不排除

@@ -9,14 +9,7 @@ import {
 } from "@tabler/icons-react";
 import { useCanvas } from "../../../context/CanvasContext";
 import type { CanvasShape, ShapePatch } from "../../../types/shape";
-import {
-  MIN_SHAPE_SIZE,
-  MIN_FONT_SIZE,
-  MAX_BRUSH_SIZE,
-  MAX_ERASER_SIZE,
-  MIN_OPACITY,
-  MAX_OPACITY,
-} from "../../../constants/shapeConstraints";
+import { MIN_SHAPE_SIZE, MIN_FONT_SIZE, MIN_OPACITY, MAX_OPACITY } from "../../../constants/shapeConstraints";
 import { NumberField } from "../../ui/NumberField/NumberField";
 import { ColorField } from "../../ui/ColorField/ColorField";
 import { TextField } from "../../ui/TextField/TextField";
@@ -39,11 +32,14 @@ export function ShapePropertiesForm({ shape, alignIds }: ShapePropertiesFormProp
   const { updateShape } = useCanvas();
   const commit = (patch: ShapePatch) => updateShape(shape.id, patch);
 
-  // 所有 shape 類型都有 opacity（橡皮擦筆畫例外，見下方 brush 分支），欄位本身跟型別無關，共用同一份 JSX
-  const opacityField = (
+  // 除了 brush 以外的所有 shape 類型都有 opacity；brush 的透明度下放到每一筆 stroke 自己
+  // 身上（跟 color/strokeWidth/cap 一致），BrushShape 本身沒有這個欄位，所以這裡改成接受
+  // 明確 value 參數的函式，而不是預先讀 shape.opacity 算好的常數（narrow 之前 shape 可能是
+  // BrushShape，直接讀 shape.opacity 會編譯失敗）
+  const renderOpacityField = (value: number) => (
     <NumberField
       label="opacity"
-      value={shape.opacity}
+      value={value}
       min={MIN_OPACITY}
       max={MAX_OPACITY}
       round
@@ -91,7 +87,7 @@ export function ShapePropertiesForm({ shape, alignIds }: ShapePropertiesFormProp
         </>
       )}
 
-      {shape.type === "image" && opacityField}
+      {shape.type === "image" && renderOpacityField(shape.opacity)}
 
       {/* 星形這次不開放拉伸，只存一個 size，width/height 兩欄位背後讀寫同一個值 */}
       {shape.type === "star" && (
@@ -136,7 +132,7 @@ export function ShapePropertiesForm({ shape, alignIds }: ShapePropertiesFormProp
         <ColorField label="fill" value={shape.fill} onCommit={(v) => commit({ fill: v })} />
       )}
 
-      {shape.type === "text" && opacityField}
+      {shape.type === "text" && renderOpacityField(shape.opacity)}
 
       {/* Rect/Circle/Triangle/Star 的邊框設定：strokeEnabled 是明確的顯示開關，
           不再用 strokeWidth: 0 表示不顯示（見 CLAUDE.md 這輪的變更說明） */}
@@ -164,7 +160,7 @@ export function ShapePropertiesForm({ shape, alignIds }: ShapePropertiesFormProp
             muted={!shape.strokeEnabled}
             onCommit={(v) => commit({ strokeWidth: v })}
           />
-          {opacityField}
+          {renderOpacityField(shape.opacity)}
         </>
       )}
 
@@ -178,27 +174,14 @@ export function ShapePropertiesForm({ shape, alignIds }: ShapePropertiesFormProp
             round
             onCommit={(v) => commit({ strokeWidth: v })}
           />
-          {opacityField}
+          {renderOpacityField(shape.opacity)}
         </>
       )}
 
-      {/* 畫筆筆畫沒有 fill，橡皮擦沒有顏色；橡皮擦也不開放調整透明度（見 CLAUDE.md 這輪的變更說明） */}
-      {shape.type === "brush" && (
-        <>
-          {shape.tool === "brush" && (
-            <ColorField label="stroke" value={shape.stroke} onCommit={(v) => commit({ stroke: v })} />
-          )}
-          <NumberField
-            label="strokeWidth"
-            value={shape.strokeWidth}
-            min={1}
-            max={shape.tool === "eraser" ? MAX_ERASER_SIZE : MAX_BRUSH_SIZE}
-            round
-            onCommit={(v) => commit({ strokeWidth: v })}
-          />
-          {shape.tool === "brush" && opacityField}
-        </>
-      )}
+      {/* 畫筆筆畫（BrushShape）現在沒有任何可以在面板直接編輯的屬性，包含 opacity 也下放到
+          每一筆 stroke（跟 color/strokeWidth/cap 一致）——一個 shape 是一整個繪畫 session
+          累積的多筆筆畫，沒有單一值可以在這裡編輯；要調整內容請雙擊圖層重新進入編輯
+          （見 CLAUDE.md 畫筆/橡皮擦條目） */}
 
       {shape.type === "rect" && (
         <NumberField

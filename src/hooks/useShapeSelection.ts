@@ -10,6 +10,7 @@ import { MIN_FONT_SIZE, MIN_SHAPE_SIZE } from "../constants/shapeConstraints";
 import { isAdditiveClick } from "../utils/selection";
 import { rectsIntersect } from "../utils/geometry";
 import type { Rect } from "../utils/geometry";
+import { scaleStrokes } from "../utils/brush";
 
 // 大部分 shape 類型（含多選）只留四角控點，不給邊控點
 const CORNER_ANCHORS = ["top-left", "top-right", "bottom-left", "bottom-right"];
@@ -82,9 +83,9 @@ function applyTransformerTarget(
 ) {
   transformer.nodes(nodes);
 
-  // 畫筆筆畫底層也是 Line，靠 name="freehand"（見 KonvaBoard.tsx）排除，避免套用直線專用的兩端控點
-  const isSingleStraightLine =
-    nodes.length === 1 && nodes[0].getClassName() === "Line" && !nodes[0].hasName("freehand");
+  // 畫筆筆畫渲染成 Group（見 KonvaBoard.tsx），class name 是 "Group" 不是 "Line"，
+  // 不會被誤判成直線，因此這裡不需要再額外排除
+  const isSingleStraightLine = nodes.length === 1 && nodes[0].getClassName() === "Line";
   const keepRatio =
     nodes.length === 1 &&
     (UNIFORM_SCALE_CLASS_NAMES.has(nodes[0].getClassName()) || singleSelectedLockAspectRatio);
@@ -461,6 +462,22 @@ export function useShapeSelection(): UseShapeSelectionResult {
           size: newSize,
         });
         return;
+      }
+
+      if (node.getClassName() === "Group") {
+        // 畫筆筆畫渲染成 Group（見 KonvaBoard.tsx），沒有 width/height 的 setter 可以套，
+        // 改成把 scaleX/scaleY 套用到每一筆 stroke 的所有座標點（邏輯跟下面 Line 的
+        // points 縮放一致，只是要迴圈套用到多筆 stroke，見 utils/brush.ts 的 scaleStrokes）
+        const currentShape = shapes.find((shape) => shape.id === id);
+        if (currentShape?.type === "brush") {
+          updateShape(id, {
+            x: Math.round(node.x()),
+            y: Math.round(node.y()),
+            rotation,
+            strokes: scaleStrokes(currentShape.strokes, scaleX, scaleY),
+          });
+          return;
+        }
       }
 
       if (node.getClassName() === "Line") {

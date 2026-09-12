@@ -8,9 +8,6 @@ export const MAX_BRUSH_SIZE = 100;
 export const MIN_ERASER_SIZE = 1;
 export const MAX_ERASER_SIZE = 150;
 
-// 橡皮擦筆畫顏色，視覺上不重要（destination-out 合成看不到顏色）
-export const ERASER_STROKE_COLOR = "#000000";
-
 // 畫布尺寸上下限
 export const MIN_CANVAS_SIZE = 100;
 export const MAX_CANVAS_SIZE = 4000;
