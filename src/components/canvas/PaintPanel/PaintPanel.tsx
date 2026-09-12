@@ -51,7 +51,7 @@ export function PaintPanel() {
 
       {activeTool === "brush" && (
         <>
-          <ColorField label="顏色" value={brushColor} onCommit={setBrushColor} />
+          <ColorField label="顏色" value={brushColor} onCommit={setBrushColor} instant />
           <NumberField
             label="大小"
             value={brushSize}
