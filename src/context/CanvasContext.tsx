@@ -68,12 +68,15 @@ interface CanvasContextValue {
   addStar: () => void; // 新增星形
   addLine: (dashed: boolean) => void; // 新增直線/虛線
   addBrushShape: (params: {
-    // 提交一整個繪畫 session 累積的所有筆畫，合併成一個新的 BrushShape
+    // 建立一個新 BrushShape：畫筆/橡皮擦連續使用期間的「第一筆」呼叫這個，回傳新 id 讓
+    // 呼叫端（useFreehandDraw.ts）記住這個 session 接下來要往哪個 shape 追加
     x: number;
     y: number;
     rotation: number;
     strokes: BrushStroke[];
-  }) => void;
+  }) => string;
+  appendBrushStroke: (id: string, stroke: BrushStroke) => boolean; // 把一筆新畫完的 stroke 追加進既有 BrushShape，id 不存在（例如中途被 undo 掉）回傳 false
+  setBrushStrokes: (id: string, strokes: BrushStroke[]) => boolean; // 橡皮擦一次手勢結束時整批換掉 strokes；換成空陣列會改成刪除該 shape，回傳值＝這個 shape 之後是否還存在
   updateShape: (id: string, patch: ShapePatch) => void; // 更新單一物件屬性
   updateShapes: (patches: { id: string; patch: ShapePatch }[]) => void; // 批次更新多個物件屬性
   alignShapes: (ids: string[], mode: AlignMode) => void; // 對齊選取物件到畫布邊界/中心
@@ -386,14 +389,12 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [canvasWidth, canvasHeight, nextId, pushHistoryEntry, setSelectedIds],
   );
 
-  // 提交一整個繪畫 session 累積的所有筆畫，合併成一個新的 BrushShape；只在 session 真的
-  // 畫出東西時由呼叫端（useFreehandDraw.ts）呼叫，這裡再擋一次空陣列純粹是保底。
-  // 跟其他 addXxx 一致自動選取剛建立的物件——先前「不自動選取避免被 Transformer 干擾」的
-  // 舊考量只適用於「每畫一筆就提交一次」的舊模型（此時使用者其實還在連續畫下一筆），
-  // 這次改成整個 session 結束（使用者已經切回 select 工具）才提交一次，這個顧慮不再成立
+  // 建立一個新 BrushShape：畫筆/橡皮擦連續使用期間第一筆畫完（或編輯中的 shape 中途被
+  // undo 掉、下一筆需要重新起一個新 shape）時由呼叫端（useFreehandDraw.ts）呼叫，回傳新
+  // id 讓呼叫端記住接下來要往哪個 shape 追加（appendBrushStroke）。同一個連續使用期間
+  // 的後續筆畫不會再呼叫這個函式，改呼叫 appendBrushStroke，見 CLAUDE.md 畫筆/橡皮擦條目
   const addBrushShape = useCallback(
     (params: { x: number; y: number; rotation: number; strokes: BrushStroke[] }) => {
-      if (params.strokes.length === 0) return;
       pushHistoryEntry();
       const id = nextId("brush");
       setShapes((prev) => [
@@ -409,8 +410,28 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       ]);
       setSelectedIds([id]);
       setActiveId(id);
+      return id;
     },
     [nextId, pushHistoryEntry, setSelectedIds],
+  );
+
+  // 把一筆新畫完的 stroke 追加進既有 BrushShape，一次呼叫推一筆 undo history——這是「每完成
+  // 一筆就能各自被 Ctrl+Z 復原」的核心：找不到這個 id（例如同一個 session 中途使用者按了
+  // Ctrl+Z，把這個 shape 復原掉了）就完全不做事、不推無意義的 history entry，回傳 false
+  // 讓呼叫端知道要退回成「全新一筆」處理（見 useFreehandDraw.ts 的 finishStroke）
+  const appendBrushStroke = useCallback(
+    (id: string, stroke: BrushStroke) => {
+      const shape = shapes.find((s) => s.id === id);
+      if (!shape || shape.type !== "brush") return false;
+      pushHistoryEntry();
+      setShapes((prev) =>
+        prev.map((s) => (s.id === id && s.type === "brush" ? { ...s, strokes: [...s.strokes, stroke] } : s)),
+      );
+      setSelectedIds([id]);
+      setActiveId(id);
+      return true;
+    },
+    [shapes, pushHistoryEntry, setSelectedIds],
   );
 
   // 更新單一物件屬性
@@ -568,6 +589,29 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   );
 
   const deleteShape = useCallback((id: string) => deleteShapes([id]), [deleteShapes]); // 刪除單一物件
+
+  // 橡皮擦一次連續拖曳手勢（mousedown -> mouseup）結束時，把整個 shape 的 strokes 換成
+  // 挖除後的結果，只推一筆 undo history。挖光（strokes 變成空陣列）時改呼叫既有的
+  // deleteShapes（已經會自己推一筆 history，這裡不要重複推）；找不到這個 id 一樣靜默跳過。
+  // 回傳值語意＝「這個 shape 之後是否還存在」，讓呼叫端能判斷是否要把 session 重置成全新
+  const setBrushStrokes = useCallback(
+    (id: string, strokes: BrushStroke[]) => {
+      const shape = shapes.find((s) => s.id === id);
+      if (!shape || shape.type !== "brush") return false;
+
+      if (strokes.length === 0) {
+        deleteShapes([id]);
+        return false;
+      }
+
+      pushHistoryEntry();
+      setShapes((prev) => prev.map((s) => (s.id === id && s.type === "brush" ? { ...s, strokes } : s)));
+      setSelectedIds([id]);
+      setActiveId(id);
+      return true;
+    },
+    [shapes, pushHistoryEntry, deleteShapes, setSelectedIds],
+  );
 
   // clipboard 是純 UI 暫態（跟 isShapePickerOpen 同類），不進 CanvasSnapshot，用 ref 存即可不用觸發 re-render
   const clipboardRef = useRef<CanvasShape[]>([]);
@@ -745,6 +789,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       addStar,
       addLine,
       addBrushShape,
+      appendBrushStroke,
+      setBrushStrokes,
       updateShape,
       updateShapes,
       alignShapes,
@@ -794,6 +840,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
       addStar,
       addLine,
       addBrushShape,
+      appendBrushStroke,
+      setBrushStrokes,
       updateShape,
       updateShapes,
       alignShapes,

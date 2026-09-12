@@ -62,6 +62,7 @@ export function KonvaBoard() {
   const {
     session,
     inProgressStroke,
+    erasePreview,
     handleDrawMouseDown,
     handleDrawMouseMove,
     handleDrawMouseUp,
@@ -136,32 +137,6 @@ export function KonvaBoard() {
     onTransformEnd: handleTransformEnd(id),
   });
 
-  // 草稿 session 的即時預覽內容（已完成的 strokes + 正在畫的這一筆）；opacity 是每一筆
-  // stroke 自己的屬性（跟 color/strokeWidth/cap 一致），不是整個 session/shape 共用一份
-  const sessionPreview = session && (
-    <>
-      {session.strokes.map((stroke, index) => (
-        <Line
-          key={`stroke-${index}`}
-          points={stroke.points}
-          stroke={stroke.color}
-          strokeWidth={stroke.strokeWidth}
-          opacity={stroke.opacity / 100}
-          {...brushStrokeLineProps(stroke.cap)}
-        />
-      ))}
-      {inProgressStroke && (
-        <Line
-          points={inProgressStroke.points}
-          stroke={inProgressStroke.color}
-          strokeWidth={inProgressStroke.strokeWidth}
-          opacity={inProgressStroke.opacity / 100}
-          {...brushStrokeLineProps(inProgressStroke.cap)}
-        />
-      )}
-    </>
-  );
-
   return (
     <div
       ref={containerRef}
@@ -198,29 +173,23 @@ export function KonvaBoard() {
         </Layer>
 
         {/* 依陣列順序渲染所有 shape，clip 到畫布範圍，物件拖出畫布外時超出的部分要被裁掉看不見
-            （不是限制拖曳座標本身）。橡皮擦不再靠 destination-out 疊圖層遮罩（是直接修改草稿
-            資料的點，見 useFreehandDraw.ts），所以不需要再依是否為畫筆切成多個交錯的 Layer，
+            （不是限制拖曳座標本身）。橡皮擦不靠 destination-out 疊圖層遮罩，而是對 BrushShape
+            的 strokes 點資料做向量挖除，拖曳中先存在 erasePreview 即時預覽、放開滑鼠才寫回
+            shapes[]（見 useFreehandDraw.ts），所以不需要再依是否為畫筆切成多個交錯的 Layer，
             單一 Layer 就能正確反映圖層順序 */}
         <Layer clipX={0} clipY={0} clipWidth={canvasWidth} clipHeight={canvasHeight}>
           {shapes.map((shape) => {
               const commonHandlers = buildCommonHandlers(shape.id);
 
               if (shape.type === "brush") {
-                // 正在編輯這個 shape 時，改成渲染草稿 session 的即時內容（同一個位置，
-                // 維持原本的圖層順序），不渲染它已提交的靜態版本，避免兩份畫面同時出現
-                if (session?.editingId === shape.id) {
-                  return (
-                    <Group
-                      key={shape.id}
-                      x={session.x}
-                      y={session.y}
-                      rotation={session.rotation}
-                      listening={false}
-                    >
-                      {sessionPreview}
-                    </Group>
-                  );
-                }
+                // shapes[] 現在就是即時最新的資料（每一筆/每次橡皮擦手勢都已經提交），正常
+                // 情況直接照它渲染；只有這個 shape 正在被橡皮擦即時挖除中，才改成渲染這次
+                // 手勢的即時預覽結果（取代 shapes[] 裡這份還沒被這次手勢更新的舊資料）
+                const strokesToRender =
+                  erasePreview?.shapeId === shape.id ? erasePreview.strokes : shape.strokes;
+                // 這個 shape 正在被追加畫下一筆、且那一筆還沒收尾（放開滑鼠）：已提交的
+                // strokes 之外，額外疊一條正在畫的 inProgressStroke
+                const showInProgress = session?.shapeId === shape.id && inProgressStroke;
 
                 return (
                   <Group
@@ -233,7 +202,7 @@ export function KonvaBoard() {
                     onDblClick={activeTool === "select" ? () => enterBrushEdit(shape) : undefined}
                     {...commonHandlers}
                   >
-                    {shape.strokes.map((stroke, index) => (
+                    {strokesToRender.map((stroke, index) => (
                       <Line
                         key={index}
                         points={stroke.points}
@@ -243,6 +212,15 @@ export function KonvaBoard() {
                         {...brushStrokeLineProps(stroke.cap)}
                       />
                     ))}
+                    {showInProgress && (
+                      <Line
+                        points={inProgressStroke.points}
+                        stroke={inProgressStroke.color}
+                        strokeWidth={inProgressStroke.strokeWidth}
+                        opacity={inProgressStroke.opacity / 100}
+                        {...brushStrokeLineProps(inProgressStroke.cap)}
+                      />
+                    )}
                   </Group>
                 );
               }
@@ -388,16 +366,24 @@ export function KonvaBoard() {
                 />
               );
             })}
-          {/* 全新 session（不是編輯既有 shape）的即時預覽，附加在所有既有 shape 後面（最上層），
-              因為之後提交時也是 append 到 shapes 陣列最後面（最上層），z-order 保持一致 */}
-          {session && session.editingId === null && (
+          {/* 全新 session 還沒有任何對應 shape、且正在畫第一筆（還沒放開滑鼠收尾）的即時預覽，
+              附加在所有既有 shape 後面（最上層），因為收尾時 addBrushShape 也是 append 到
+              shapes 陣列最後面（最上層），z-order 保持一致。放開滑鼠收尾後 shapes[] 會多一個
+              對應的 shape，下一個 render 就會走上面「正常情況」那條路徑，這裡自然不再顯示 */}
+          {session && session.shapeId === null && inProgressStroke && (
             <Group
               x={session.x}
               y={session.y}
               rotation={session.rotation}
               listening={false}
             >
-              {sessionPreview}
+              <Line
+                points={inProgressStroke.points}
+                stroke={inProgressStroke.color}
+                strokeWidth={inProgressStroke.strokeWidth}
+                opacity={inProgressStroke.opacity / 100}
+                {...brushStrokeLineProps(inProgressStroke.cap)}
+              />
             </Group>
           )}
         </Layer>
