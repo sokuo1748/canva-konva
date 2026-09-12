@@ -6,6 +6,7 @@ import { LayersPanel } from "../LayersPanel/LayersPanel";
 import { KonvaBoard } from "../KonvaSkill/KonvaBoard";
 import { SelectedShapePanel } from "../SelectedShapePanel/SelectedShapePanel";
 import { CanvasProvider } from "../../../context/CanvasContext";
+import { PaintSettingsProvider } from "../../../context/PaintSettingsContext";
 import { useKeyboardShortcuts } from "../../../hooks/useKeyboardShortcuts";
 import styles from "./CanvasWorkspace.module.scss";
 
@@ -38,7 +39,9 @@ function CanvasWorkspaceContent() {
 export function CanvasWorkspace() {
   return (
     <CanvasProvider>
-      <CanvasWorkspaceContent />
+      <PaintSettingsProvider>
+        <CanvasWorkspaceContent />
+      </PaintSettingsProvider>
     </CanvasProvider>
   );
 }
