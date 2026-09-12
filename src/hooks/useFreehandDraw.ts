@@ -237,10 +237,17 @@ export function useFreehandDraw(): UseFreehandDrawResult {
         return;
       }
 
-      // brush：全新 session（還沒有對應 shape）的第一筆，用它的起點當作整個 session 的原點
-      const isFirstStrokeOfNewSession = current.shapeId === null;
+      // brush：全新 session（還沒有對應 shape，或對應的 shape 已經被中途 undo 掉）的
+      // 第一筆，用它的起點當作整個 session 的原點。只看 shapeId 是不是 null 不夠——undo
+      // 會直接改 context 的 shapes[]，不會通知這支 hook 把 sessionRef.current.shapeId
+      // 重置掉，所以這裡要額外確認 shapeId 指向的 shape 是否還真的存在於 shapes[] 裡
+      // （跟上面 eraser 分支、finishStroke 裡已經有的同一套檢查邏輯一致）
+      const existingShapeStillValid =
+        current.shapeId !== null &&
+        shapes.some((s) => s.id === current.shapeId && s.type === "brush");
+      const isFirstStrokeOfNewSession = !existingShapeStillValid;
       const workingSession = isFirstStrokeOfNewSession
-        ? { ...current, x: rawPos.x, y: rawPos.y, rotation: 0 }
+        ? { shapeId: null, x: rawPos.x, y: rawPos.y, rotation: 0 }
         : current;
       const local = toSessionLocalPoint(rawPos, workingSession, workingSession.rotation);
       const stroke: BrushStroke = {
